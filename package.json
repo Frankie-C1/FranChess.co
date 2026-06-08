@@ -1,0 +1,35 @@
+{
+  "name": "franchess.co",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "generate:brand-assets": "node scripts/generate-brand-assets.mjs",
+    "prepare:stockfish": "node scripts/copy-stockfish.mjs",
+    "build": "npm run prepare:stockfish && tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "chess.js": "^1.0.0",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-chessboard": "^4.7.3",
+    "react-dom": "^18.3.1",
+    "stockfish": "^18.0.7"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^5.3.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.2"
+  }
+}
