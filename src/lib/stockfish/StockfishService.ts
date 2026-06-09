@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 import { estimatePosition } from "../chess/position";
-import type { AnalysisDepth, CoachDifficulty, EngineEvaluation } from "../../types";
+import type { AnalysisDepth, CoachDifficulty, CoachStyle, EngineEvaluation } from "../../types";
 
 const depthMap: Record<AnalysisDepth, number> = {
   quick: 8,
@@ -31,6 +31,11 @@ interface EngineStatus {
   wasmActive: boolean;
   workerUrl: string;
   wasmUrl: string;
+}
+
+interface StyledMoveSuggestion {
+  move: string | null;
+  explanation: string;
 }
 
 export class StockfishService {
@@ -175,6 +180,50 @@ export class StockfishService {
     return chosen.move;
   }
 
+  async chooseMoveWithStyle(fen: string, difficulty: CoachDifficulty, style: CoachStyle): Promise<StyledMoveSuggestion> {
+    if (style === "stockfish") {
+      const move = await this.chooseMove(fen, difficulty);
+      return {
+        move,
+        explanation: move ? "Stockfish-orientiert: objektiv stärkster verfügbarer Kandidat." : "Kein legaler Zug verfügbar."
+      };
+    }
+
+    return this.suggestMove(fen, style, difficulty === "max" || difficulty === "strong" ? "normal" : "quick");
+  }
+
+  async suggestMove(fen: string, style: CoachStyle, depth: AnalysisDepth = "normal"): Promise<StyledMoveSuggestion> {
+    await this.init();
+    const chess = new Chess(fen);
+    const legalMoves = chess.moves({ verbose: true });
+    if (legalMoves.length === 0) return { move: null, explanation: "Kein legaler Zug verfügbar." };
+
+    const engine = await this.evaluateFen(fen, depth);
+    if (style === "stockfish" && engine.bestMove) {
+      return { move: engine.bestMove, explanation: "Stockfish: objektiv bester bekannter Engine-Zug in dieser Stellung." };
+    }
+
+    const turnMultiplier = chess.turn() === "w" ? 1 : -1;
+    const scored = legalMoves.map((move) => {
+      const clone = new Chess(fen);
+      clone.move(move.san);
+      const uci = `${move.from}${move.to}${move.promotion ?? ""}`;
+      const base = estimatePosition(clone.fen()) * turnMultiplier;
+      return {
+        uci,
+        score: base + styleBonus(style, chess, clone, move.san, uci, engine.bestMove),
+        san: move.san
+      };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const chosen = scored[0];
+    return {
+      move: chosen?.uci ?? engine.bestMove,
+      explanation: explainStyleChoice(style, chosen?.san ?? chosen?.uci ?? engine.bestMove)
+    };
+  }
+
   dispose(): void {
     this.worker?.terminate();
     this.worker = null;
@@ -248,4 +297,47 @@ export const stockfishService = new StockfishService();
 
 function sideToMove(fen: string): "w" | "b" {
   return fen.split(" ")[1] === "b" ? "b" : "w";
+}
+
+function styleBonus(style: CoachStyle, before: Chess, after: Chess, san: string, uci: string, engineBest: string | null): number {
+  let bonus = engineBest === uci ? 120 : 0;
+  const isCapture = san.includes("x");
+  const givesCheck = san.includes("+") || san.includes("#");
+  const targetFile = uci[2];
+  const targetRank = Number(uci[3]);
+  const center = ["d", "e"].includes(targetFile) && targetRank >= 3 && targetRank <= 6;
+  const development = /^[NB]/.test(san) && before.history().length < 12;
+  const castle = san === "O-O" || san === "O-O-O";
+
+  if (style === "magnus") {
+    bonus += castle ? 70 : 0;
+    bonus += center ? 45 : 0;
+    bonus += development ? 35 : 0;
+    bonus += givesCheck && !isCapture ? -15 : 0;
+    bonus += after.inCheck() ? -30 : 0;
+  } else if (style === "hikaru") {
+    bonus += givesCheck ? 90 : 0;
+    bonus += isCapture ? 45 : 0;
+    bonus += center ? 25 : 0;
+    bonus += development ? 20 : 0;
+  } else if (style === "kasparov") {
+    bonus += center ? 70 : 0;
+    bonus += development ? 55 : 0;
+    bonus += givesCheck ? 45 : 0;
+    bonus += isCapture ? 25 : 0;
+    bonus += castle ? 20 : 0;
+  }
+
+  return bonus;
+}
+
+function explainStyleChoice(style: CoachStyle, move: string | null | undefined): string {
+  const prefix = move ? `${move}: ` : "";
+  const map: Record<CoachStyle, string> = {
+    stockfish: "objektiv bester Engine-Kandidat.",
+    magnus: "Stil-Simulation: solide, positionell und mit Fokus auf langfristigen Druck.",
+    hikaru: "Stil-Simulation: aktiv, taktisch und auf Initiative ausgerichtet.",
+    kasparov: "Stil-Simulation: Raum, Zentrum, Aktivität und Angriffsdruck stehen im Vordergrund."
+  };
+  return `${prefix}${map[style]}`;
 }

@@ -41,8 +41,6 @@ body,
   max-width: 100%;
   overflow-x: hidden;
   overscroll-behavior-x: none;
-  overscroll-behavior-y: none;
-  touch-action: pan-y;
 }
 
 #root {
@@ -65,7 +63,7 @@ select {
 button,
 a,
 [role="button"] {
-  touch-action: manipulation;
+  touch-action: pan-y pinch-zoom;
 }
 
 img,
@@ -82,6 +80,18 @@ canvas {
 }
 
 @media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  #root::-webkit-scrollbar {
+    display: none;
+  }
+
   input,
   select,
   textarea {

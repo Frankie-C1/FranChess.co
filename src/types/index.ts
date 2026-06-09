@@ -1,8 +1,10 @@
-export type CoachView = "home" | "upload" | "dashboard" | "viewer" | "play" | "training" | "export";
+export type CoachView = "home" | "upload" | "dashboard" | "viewer" | "play" | "training" | "export" | "settings";
 
 export type AnalysisDepth = "quick" | "normal" | "deep";
 
 export type CoachDifficulty = "beginner" | "intermediate" | "strong" | "max";
+
+export type CoachStyle = "stockfish" | "magnus" | "hikaru" | "kasparov";
 
 export type GameResult = "1-0" | "0-1" | "1/2-1/2" | "*";
 
@@ -17,11 +19,28 @@ export type MistakeCategory =
   | "missed_mate"
   | "missed_tactic"
   | "hanging_piece"
+  | "undefended_piece"
+  | "missed_fork"
+  | "missed_pin"
+  | "missed_skewer"
+  | "allowed_mate_threat"
   | "king_safety"
   | "bad_development"
+  | "early_queen"
+  | "repeated_piece_move"
+  | "ignored_threat"
   | "opening_principle"
   | "endgame_error"
+  | "tactical_blunder"
+  | "exchange_blunder"
+  | "pawn_structure_damage"
   | "time_pressure";
+
+export interface AppSettings {
+  darkMode: boolean;
+  showLegalMoves: boolean;
+  allowOpponentMoves: boolean;
+}
 
 export interface GameMetadata {
   white: string;

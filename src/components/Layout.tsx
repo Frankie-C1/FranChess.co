@@ -7,7 +7,7 @@ interface LayoutProps {
   nav: Array<{ id: CoachView; label: string; icon: LucideIcon }>;
   view: CoachView;
   onNavigate: (view: CoachView) => void;
-  utility: ReactNode;
+  utility?: ReactNode;
   children: ReactNode;
 }
 

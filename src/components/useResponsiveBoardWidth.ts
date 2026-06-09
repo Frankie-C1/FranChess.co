@@ -10,7 +10,11 @@ export function useResponsiveBoardWidth(maxWidth = 392) {
 
     const update = () => {
       const rect = element.getBoundingClientRect();
-      setWidth(Math.max(240, Math.min(maxWidth, Math.floor(rect.width))));
+      const styles = window.getComputedStyle(element);
+      const horizontalPadding = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
+      const contentWidth = rect.width - horizontalPadding;
+      const viewportWidth = window.innerWidth - 24;
+      setWidth(Math.max(240, Math.min(maxWidth, Math.floor(contentWidth), viewportWidth)));
     };
 
     update();

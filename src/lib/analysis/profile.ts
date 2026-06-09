@@ -73,10 +73,21 @@ function diagnose(topCategories: Array<{ category: MistakeCategory; count: numbe
     missed_mate: "Größte Elo-Bremse: Mattmotive werden nicht konsequent gesucht.",
     missed_tactic: "Größte Elo-Bremse: taktische Ressourcen bleiben ungenutzt.",
     hanging_piece: "Größte Elo-Bremse: Material hängt zu oft ungedeckt.",
+    undefended_piece: "Größte Elo-Bremse: ungedeckte Figuren werden zu häufig übersehen.",
+    missed_fork: "Größte Elo-Bremse: Gabelmotive werden zu selten geprüft.",
+    missed_pin: "Größte Elo-Bremse: Fesselungen und Linienzugriffe bleiben ungenutzt.",
+    missed_skewer: "Größte Elo-Bremse: Linienmotive gegen wichtige Figuren werden verpasst.",
+    allowed_mate_threat: "Größte Elo-Bremse: gegnerische Mattdrohungen werden zu spät erkannt.",
     king_safety: "Größte Elo-Bremse: Königssicherheit wird gegen Aktivität unterschätzt.",
     bad_development: "Größte Elo-Bremse: Figuren werden mehrfach gezogen, bevor die Entwicklung abgeschlossen ist.",
+    early_queen: "Größte Elo-Bremse: frühe Damenausflüge kosten Entwicklungstempi.",
+    repeated_piece_move: "Größte Elo-Bremse: Figuren werden mehrfach gezogen, bevor das Zentrum stabil ist.",
+    ignored_threat: "Größte Elo-Bremse: gegnerische Drohungen werden zu oft ignoriert.",
     opening_principle: "Größte Elo-Bremse: Eröffnungsprinzipien werden zu oft verletzt.",
     endgame_error: "Größte Elo-Bremse: Endspielpräzision und Aktivität kosten Punkte.",
+    tactical_blunder: "Größte Elo-Bremse: konkrete Taktiken des Gegners werden übersehen.",
+    exchange_blunder: "Größte Elo-Bremse: Abtäusche werden materiell nicht sauber bewertet.",
+    pawn_structure_damage: "Größte Elo-Bremse: Bauernstruktur wird ohne ausreichende Kompensation geschwächt.",
     time_pressure: "Größte Elo-Bremse: Entscheidungen unter Zeitdruck brauchen ein robusteres Raster."
   };
   return map[top];

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, Brain, Download, Moon, Play, Sun, Upload } from "lucide-react";
+import { Activity, BarChart3, Brain, Download, Play, Settings, Upload } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
@@ -9,7 +9,9 @@ import { ViewerPage } from "./pages/ViewerPage";
 import { PlayPage } from "./pages/PlayPage";
 import { TrainingPage } from "./pages/TrainingPage";
 import { ExportPage } from "./pages/ExportPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { storageAdapter } from "./lib/storage";
+import { loadSettings, saveSettings } from "./lib/storage/settings";
 import type { CoachView, StoredGame } from "./types";
 
 const nav = [
@@ -19,14 +21,15 @@ const nav = [
   { id: "viewer", label: "Viewer", icon: Brain },
   { id: "play", label: "Coach", icon: Play },
   { id: "training", label: "Training", icon: Brain },
-  { id: "export", label: "Export", icon: Download }
+  { id: "export", label: "Export", icon: Download },
+  { id: "settings", label: "Einstellungen", icon: Settings }
 ] satisfies Array<{ id: CoachView; label: string; icon: LucideIcon }>;
 
 export default function App() {
   const [view, setView] = useState<CoachView>("home");
   const [games, setGames] = useState<StoredGame[]>([]);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [settings, setSettings] = useState(loadSettings);
 
   useEffect(() => {
     storageAdapter.loadGames().then((loaded) => {
@@ -36,8 +39,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-  }, [darkMode]);
+    document.documentElement.classList.toggle("dark", settings.darkMode);
+    saveSettings(settings);
+  }, [settings]);
 
   const selectedGame = useMemo(
     () => games.find((game) => game.id === selectedGameId) ?? games[0] ?? null,
@@ -55,17 +59,6 @@ export default function App() {
       nav={nav}
       view={view}
       onNavigate={setView}
-      utility={
-        <button
-          type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white text-stone-700 shadow-sm transition hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800"
-          onClick={() => setDarkMode((value) => !value)}
-          aria-label={darkMode ? "Hellen Modus aktivieren" : "Dunklen Modus aktivieren"}
-          title={darkMode ? "Heller Modus" : "Dunkler Modus"}
-        >
-          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-      }
     >
       {view === "home" && <HomePage onNavigate={setView} gameCount={games.length} />}
       {view === "upload" && <UploadPage games={games} onGamesChange={updateGames} onSelectGame={setSelectedGameId} />}
@@ -77,13 +70,15 @@ export default function App() {
           onSelectGame={setSelectedGameId}
           onGamesChange={updateGames}
           onUpload={() => setView("upload")}
+          settings={settings}
         />
       )}
-      {view === "play" && <PlayPage />}
+      {view === "play" && <PlayPage settings={settings} games={games} />}
       {view === "training" && (
         <TrainingPage games={games} onUpload={() => setView("upload")} onSelectGame={(id) => { setSelectedGameId(id); setView("viewer"); }} />
       )}
       {view === "export" && <ExportPage games={games} onUpload={() => setView("upload")} />}
+      {view === "settings" && <SettingsPage settings={settings} onSettingsChange={setSettings} />}
     </Layout>
   );
 }
