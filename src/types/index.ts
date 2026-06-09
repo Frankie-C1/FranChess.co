@@ -2,9 +2,7 @@ export type CoachView = "home" | "upload" | "dashboard" | "viewer" | "play" | "t
 
 export type AnalysisDepth = "quick" | "normal" | "deep";
 
-export type CoachDifficulty = "beginner" | "intermediate" | "strong" | "max";
-
-export type CoachStyle = "stockfish" | "magnus" | "hikaru" | "kasparov";
+export type EngineElo = 800 | 1000 | 1200 | 1400 | 1600 | 1800 | 2000 | 2200 | "max";
 
 export type GameResult = "1-0" | "0-1" | "1/2-1/2" | "*";
 
@@ -40,6 +38,8 @@ export interface AppSettings {
   darkMode: boolean;
   showLegalMoves: boolean;
   allowOpponentMoves: boolean;
+  engineElo: EngineElo;
+  coachSettingsCollapsed: boolean;
 }
 
 export interface GameMetadata {
@@ -71,12 +71,45 @@ export interface StoredGame {
   analyzedAt?: string;
   analysis: MoveAnalysis[];
   source?: GameSource;
+  favorite?: boolean;
 }
 
 export interface EngineEvaluation {
   cp: number | null;
   mate: number | null;
   bestMove: string | null;
+  candidateMoves: EngineCandidateMove[];
+  fen: string;
+  multipvAvailable: boolean;
+}
+
+export interface EngineCandidateMove {
+  rank: number;
+  move: string;
+  cp: number | null;
+  mate: number | null;
+  pv: string[];
+}
+
+export type MoveJudgementKind = "brilliant" | "good" | "only_move" | "interesting" | "dubious" | "mistake" | "blunder";
+
+export interface MoveJudgement {
+  kind: MoveJudgementKind;
+  symbol: "!!" | "!" | "□" | "!?" | "?!" | "?" | "??";
+  text: string;
+  comment: string;
+  centipawnLoss: number;
+}
+
+export interface CapturedMaterial {
+  white: {
+    captured: string[];
+    advantage: number;
+  };
+  black: {
+    captured: string[];
+    advantage: number;
+  };
 }
 
 export interface MoveAnalysis {

@@ -54,6 +54,15 @@ export default function App() {
     await storageAdapter.saveGames(nextGames);
   }
 
+  function openGame(id: string) {
+    setSelectedGameId(id);
+    setView("viewer");
+  }
+
+  async function toggleFavorite(id: string) {
+    await updateGames(games.map((game) => (game.id === id ? { ...game, favorite: !game.favorite } : game)));
+  }
+
   return (
     <Layout
       nav={nav}
@@ -61,7 +70,7 @@ export default function App() {
       onNavigate={setView}
     >
       {view === "home" && <HomePage onNavigate={setView} gameCount={games.length} />}
-      {view === "upload" && <UploadPage games={games} onGamesChange={updateGames} onSelectGame={setSelectedGameId} />}
+      {view === "upload" && <UploadPage games={games} onGamesChange={updateGames} onOpenGame={openGame} onToggleFavorite={toggleFavorite} />}
       {view === "dashboard" && <DashboardPage games={games} onNavigate={setView} />}
       {view === "viewer" && (
         <ViewerPage
@@ -73,12 +82,12 @@ export default function App() {
           settings={settings}
         />
       )}
-      {view === "play" && <PlayPage settings={settings} games={games} />}
+      {view === "play" && <PlayPage settings={settings} onSettingsChange={setSettings} games={games} />}
       {view === "training" && (
         <TrainingPage games={games} onUpload={() => setView("upload")} onSelectGame={(id) => { setSelectedGameId(id); setView("viewer"); }} />
       )}
       {view === "export" && <ExportPage games={games} onUpload={() => setView("upload")} />}
-      {view === "settings" && <SettingsPage settings={settings} onSettingsChange={setSettings} />}
+      {view === "settings" && <SettingsPage settings={settings} onSettingsChange={setSettings} games={games} onOpenGame={openGame} onToggleFavorite={toggleFavorite} />}
     </Layout>
   );
 }

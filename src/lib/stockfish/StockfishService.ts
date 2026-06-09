@@ -1,6 +1,5 @@
 import { Chess } from "chess.js";
-import { estimatePosition } from "../chess/position";
-import type { AnalysisDepth, CoachDifficulty, CoachStyle, EngineEvaluation } from "../../types";
+import type { AnalysisDepth, EngineCandidateMove, EngineElo, EngineEvaluation } from "../../types";
 
 const depthMap: Record<AnalysisDepth, number> = {
   quick: 8,
@@ -8,34 +7,35 @@ const depthMap: Record<AnalysisDepth, number> = {
   deep: 16
 };
 
-const difficultyMap: Record<CoachDifficulty, number> = {
-  beginner: 3,
-  intermediate: 7,
-  strong: 11,
-  max: 16
-};
+export const engineUnavailableMessage = "Stockfish konnte nicht geladen werden. Bitte Engine-Dateien prüfen.";
 
 interface PendingRequest {
+  id: number;
+  fen: string;
   resolve: (value: EngineEvaluation) => void;
   reject: (reason?: unknown) => void;
   bestMove: string | null;
-  score: { cp: number | null; mate: number | null };
-  fen: string;
+  candidateMap: Map<number, EngineCandidateMove>;
+  timeout: number;
 }
 
-type EngineMode = "stockfish-wasm" | "fallback";
-
 interface EngineStatus {
-  mode: EngineMode;
+  mode: "stockfish-wasm" | "unavailable";
   label: string;
   wasmActive: boolean;
   workerUrl: string;
   wasmUrl: string;
+  supportsElo: boolean;
+  supportsLimitStrength: boolean;
+  supportsMultiPv: boolean;
+  error: string | null;
 }
 
-interface StyledMoveSuggestion {
-  move: string | null;
-  explanation: string;
+export class StockfishUnavailableError extends Error {
+  constructor(message = engineUnavailableMessage) {
+    super(message);
+    this.name = "StockfishUnavailableError";
+  }
 }
 
 export class StockfishService {
@@ -43,51 +43,53 @@ export class StockfishService {
   private ready = false;
   private initPromise: Promise<void> | null = null;
   private pending: PendingRequest | null = null;
-  private engineMode: EngineMode = "fallback";
+  private requestId = 0;
   private readonly workerUrl = "/stockfish/stockfish.js";
   private readonly wasmUrl = "/stockfish/stockfish.wasm";
+  private lastError: string | null = null;
+  private supportedOptions = new Set<string>();
+  private currentElo: EngineElo | null = null;
 
   async init(): Promise<void> {
-    if (this.ready) return;
+    if (this.ready && this.worker) return;
     if (this.initPromise) return this.initPromise;
 
-    this.initPromise = new Promise((resolve) => {
+    this.initPromise = new Promise((resolve, reject) => {
       let sawUciOk = false;
       let sawReadyOk = false;
+      const fail = (message = engineUnavailableMessage) => {
+        window.clearTimeout(timeout);
+        this.worker?.terminate();
+        this.worker = null;
+        this.ready = false;
+        this.initPromise = null;
+        this.lastError = message;
+        reject(new StockfishUnavailableError(message));
+      };
       const finish = () => {
         if (!sawUciOk || !sawReadyOk) return;
-        this.engineMode = "stockfish-wasm";
+        window.clearTimeout(timeout);
         this.ready = true;
+        this.lastError = null;
         resolve();
       };
 
-      const timeout = window.setTimeout(() => {
-        this.worker?.terminate();
-        this.worker = null;
-        this.engineMode = "fallback";
-        this.ready = true;
-        resolve();
-      }, 8000);
+      const timeout = window.setTimeout(() => fail(), 8000);
 
       try {
         this.worker = new Worker(this.workerUrl);
-        this.worker.onerror = () => {
-          window.clearTimeout(timeout);
-          this.worker?.terminate();
-          this.worker = null;
-          this.engineMode = "fallback";
-          this.ready = true;
-          resolve();
-        };
+        this.worker.onerror = () => fail();
         this.worker.onmessage = (event) => {
           const line = String(event.data);
 
-          if (line === "uciok") {
+          if (line.startsWith("option name ")) {
+            const optionName = line.slice("option name ".length).split(" type ")[0];
+            this.supportedOptions.add(optionName);
+          } else if (line === "uciok") {
             sawUciOk = true;
             this.post("isready");
           } else if (line === "readyok") {
             sawReadyOk = true;
-            window.clearTimeout(timeout);
             finish();
           }
 
@@ -95,11 +97,7 @@ export class StockfishService {
         };
         this.post("uci");
       } catch {
-        window.clearTimeout(timeout);
-        this.worker = null;
-        this.engineMode = "fallback";
-        this.ready = true;
-        resolve();
+        fail();
       }
     });
 
@@ -107,189 +105,183 @@ export class StockfishService {
   }
 
   get isRealEngineAvailable(): boolean {
-    return this.engineMode === "stockfish-wasm" && Boolean(this.worker);
+    return this.ready && Boolean(this.worker);
   }
 
   get status(): EngineStatus {
     return {
-      mode: this.engineMode,
-      label: this.isRealEngineAvailable ? "Stockfish 18 lite single-threaded WASM" : "Fallback-Heuristik",
+      mode: this.isRealEngineAvailable ? "stockfish-wasm" : "unavailable",
+      label: this.isRealEngineAvailable ? "Stockfish 18 lite single-threaded WASM" : engineUnavailableMessage,
       wasmActive: this.isRealEngineAvailable,
       workerUrl: this.workerUrl,
-      wasmUrl: this.wasmUrl
+      wasmUrl: this.wasmUrl,
+      supportsElo: this.supportedOptions.has("UCI_Elo"),
+      supportsLimitStrength: this.supportedOptions.has("UCI_LimitStrength"),
+      supportsMultiPv: this.supportedOptions.has("MultiPV"),
+      error: this.lastError
     };
   }
 
-  async evaluateFen(fen: string, depth: AnalysisDepth = "normal"): Promise<EngineEvaluation> {
-    await this.init();
-
-    if (!this.worker) {
-      return this.fallbackEvaluate(fen, depthMap[depth]);
-    }
-
-    return new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        if (this.pending) {
-          const fallback = this.fallbackEvaluateSync(fen, depthMap[depth]);
-          this.pending = null;
-          resolve(fallback);
-        }
-      }, 5500);
-
-      this.pending = {
-        bestMove: null,
-        score: { cp: null, mate: null },
-        fen,
-        resolve: (value) => {
-          window.clearTimeout(timeout);
-          resolve(value);
-        },
-        reject: (reason) => {
-          window.clearTimeout(timeout);
-          reject(reason);
-        }
-      };
-      this.post(`position fen ${fen}`);
-      this.post(`go depth ${depthMap[depth]}`);
-    });
+  async evaluateFen(fen: string, depth: AnalysisDepth = "normal", engineElo: EngineElo = "max"): Promise<EngineEvaluation> {
+    return this.analyzeFen(fen, { depth: depthMap[depth], multipv: 1, engineElo });
   }
 
-  async chooseMove(fen: string, difficulty: CoachDifficulty): Promise<string | null> {
-    await this.init();
-    const depth = difficultyMap[difficulty];
-
-    if (this.isRealEngineAvailable && difficulty === "max") {
-      const evalResult = await this.evaluateFen(fen, "deep");
-      return evalResult.bestMove;
-    }
-
-    const chess = new Chess(fen);
-    const legalMoves = chess.moves({ verbose: true });
-    if (legalMoves.length === 0) return null;
-
-    const scored = legalMoves.map((move) => {
-      const clone = new Chess(fen);
-      clone.move(move.san);
-      const score = estimatePosition(clone.fen()) * (chess.turn() === "w" ? 1 : -1);
-      return { move: `${move.from}${move.to}${move.promotion ?? ""}`, score };
-    });
-
-    scored.sort((a, b) => b.score - a.score);
-    const windowSize = difficulty === "beginner" ? 6 : difficulty === "intermediate" ? 4 : 2;
-    const chosen = scored[Math.min(scored.length - 1, Math.floor(Math.random() * windowSize))];
-    return chosen.move;
+  async getTopMoves(fen: string, engineElo: EngineElo, depth: AnalysisDepth = "normal", count = 5): Promise<EngineEvaluation> {
+    return this.analyzeFen(fen, { depth: depthMap[depth], multipv: count, engineElo });
   }
 
-  async chooseMoveWithStyle(fen: string, difficulty: CoachDifficulty, style: CoachStyle): Promise<StyledMoveSuggestion> {
-    if (style === "stockfish") {
-      const move = await this.chooseMove(fen, difficulty);
-      return {
-        move,
-        explanation: move ? "Stockfish-orientiert: objektiv stärkster verfügbarer Kandidat." : "Kein legaler Zug verfügbar."
-      };
-    }
-
-    return this.suggestMove(fen, style, difficulty === "max" || difficulty === "strong" ? "normal" : "quick");
-  }
-
-  async suggestMove(fen: string, style: CoachStyle, depth: AnalysisDepth = "normal"): Promise<StyledMoveSuggestion> {
-    await this.init();
-    const chess = new Chess(fen);
-    const legalMoves = chess.moves({ verbose: true });
-    if (legalMoves.length === 0) return { move: null, explanation: "Kein legaler Zug verfügbar." };
-
-    const engine = await this.evaluateFen(fen, depth);
-    if (style === "stockfish" && engine.bestMove) {
-      return { move: engine.bestMove, explanation: "Stockfish: objektiv bester bekannter Engine-Zug in dieser Stellung." };
-    }
-
-    const turnMultiplier = chess.turn() === "w" ? 1 : -1;
-    const scored = legalMoves.map((move) => {
-      const clone = new Chess(fen);
-      clone.move(move.san);
-      const uci = `${move.from}${move.to}${move.promotion ?? ""}`;
-      const base = estimatePosition(clone.fen()) * turnMultiplier;
-      return {
-        uci,
-        score: base + styleBonus(style, chess, clone, move.san, uci, engine.bestMove),
-        san: move.san
-      };
-    });
-
-    scored.sort((a, b) => b.score - a.score);
-    const chosen = scored[0];
-    return {
-      move: chosen?.uci ?? engine.bestMove,
-      explanation: explainStyleChoice(style, chosen?.san ?? chosen?.uci ?? engine.bestMove)
-    };
+  async chooseMove(fen: string, engineElo: EngineElo): Promise<string | null> {
+    const evaluation = await this.evaluateFen(fen, engineElo === "max" ? "deep" : "normal", engineElo);
+    return evaluation.bestMove;
   }
 
   dispose(): void {
     this.worker?.terminate();
     this.worker = null;
+    this.ready = false;
+    this.initPromise = null;
+    this.pending = null;
+  }
+
+  private async analyzeFen(
+    fen: string,
+    options: { depth: number; multipv: number; engineElo: EngineElo }
+  ): Promise<EngineEvaluation> {
+    await this.init();
+    if (!this.worker) throw new StockfishUnavailableError();
+
+    const chess = new Chess(fen);
+    if (chess.moves().length === 0) {
+      return { cp: null, mate: null, bestMove: null, candidateMoves: [], fen, multipvAvailable: false };
+    }
+
+    this.applyEngineStrength(options.engineElo);
+    const multipv = Math.max(1, Math.min(5, options.multipv));
+    if (this.supportedOptions.has("MultiPV")) {
+      this.post(`setoption name MultiPV value ${multipv}`);
+    }
+
+    if (this.pending) {
+      window.clearTimeout(this.pending.timeout);
+      this.pending.reject(new Error("Engine request superseded by a newer position."));
+      this.pending = null;
+      this.post("stop");
+    }
+
+    return new Promise((resolve, reject) => {
+      const id = ++this.requestId;
+      const timeout = window.setTimeout(() => {
+        if (this.pending?.id !== id) return;
+        this.pending = null;
+        reject(new StockfishUnavailableError("Stockfish antwortet nicht rechtzeitig. Bitte Engine-Dateien prüfen."));
+      }, 9000);
+
+      this.pending = {
+        id,
+        fen,
+        resolve,
+        reject,
+        bestMove: null,
+        candidateMap: new Map(),
+        timeout
+      };
+
+      this.post(`position fen ${fen}`);
+      this.post(`go depth ${options.depth}`);
+    });
+  }
+
+  private applyEngineStrength(engineElo: EngineElo): void {
+    if (this.currentElo === engineElo) return;
+
+    if (engineElo === "max") {
+      if (this.supportedOptions.has("UCI_LimitStrength")) {
+        this.post("setoption name UCI_LimitStrength value false");
+      }
+      this.currentElo = engineElo;
+      return;
+    }
+
+    if (this.supportedOptions.has("UCI_LimitStrength")) {
+      this.post("setoption name UCI_LimitStrength value true");
+    }
+    if (this.supportedOptions.has("UCI_Elo")) {
+      this.post(`setoption name UCI_Elo value ${engineElo}`);
+    }
+    this.currentElo = engineElo;
   }
 
   private handleMessage(line: string): void {
     if (!this.pending) return;
 
-    const scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
-    if (scoreMatch) {
-      const multiplier = sideToMove(this.pending.fen) === "w" ? 1 : -1;
-      if (scoreMatch[1] === "cp") {
-        this.pending.score.cp = Number(scoreMatch[2]) * multiplier;
-        this.pending.score.mate = null;
-      } else {
-        this.pending.score.cp = null;
-        this.pending.score.mate = Number(scoreMatch[2]) * multiplier;
-      }
+    if (line.startsWith("info ")) {
+      this.parseInfoLine(line, this.pending);
+      return;
     }
 
-    const pvMove = line.match(/\spv\s([a-h][1-8][a-h][1-8][qrbn]?)/);
-    if (pvMove) {
-      this.pending.bestMove = pvMove[1];
+    if (!line.startsWith("bestmove")) return;
+
+    const pending = this.pending;
+    window.clearTimeout(pending.timeout);
+    this.pending = null;
+
+    const rawBestMove = line.split(" ")[1] || pending.bestMove;
+    const bestMove = this.validateBestMove(pending.fen, rawBestMove);
+    if (rawBestMove && !bestMove) {
+      this.lastError = `Stockfish lieferte einen illegalen Zug: ${rawBestMove}`;
+      this.dispose();
+      pending.reject(new Error(this.lastError));
+      return;
     }
 
-    if (line.startsWith("bestmove")) {
-      const bestMove = line.split(" ")[1] || this.pending.bestMove;
-      const result = {
-        cp: this.pending.score.cp,
-        mate: this.pending.score.mate,
-        bestMove
-      };
-      this.pending.resolve(result);
-      this.pending = null;
-    }
+    const candidates = [...pending.candidateMap.values()]
+      .filter((candidate) => this.validateBestMove(pending.fen, candidate.move))
+      .sort((a, b) => a.rank - b.rank);
+    const primary = candidates.find((candidate) => candidate.move === bestMove) ?? candidates[0] ?? null;
+    const candidateMoves = bestMove ? ensureBestMoveCandidate(candidates, bestMove) : candidates;
+
+    pending.resolve({
+      cp: primary?.cp ?? null,
+      mate: primary?.mate ?? null,
+      bestMove,
+      candidateMoves,
+      fen: pending.fen,
+      multipvAvailable: candidateMoves.length > 1
+    });
+  }
+
+  private parseInfoLine(line: string, pending: PendingRequest): void {
+    const pvMatch = line.match(/\spv\s(.+)$/);
+    if (!pvMatch) return;
+
+    const multipvMatch = line.match(/\bmultipv\s+(\d+)/);
+    const rank = multipvMatch ? Number(multipvMatch[1]) : 1;
+    const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
+    const pv = pvMatch[1].trim().split(/\s+/).filter(Boolean);
+    const move = pv[0];
+    if (!move) return;
+
+    const multiplier = sideToMove(pending.fen) === "w" ? 1 : -1;
+    const candidate: EngineCandidateMove = {
+      rank,
+      move,
+      cp: scoreMatch?.[1] === "cp" ? Number(scoreMatch[2]) * multiplier : null,
+      mate: scoreMatch?.[1] === "mate" ? Number(scoreMatch[2]) * multiplier : null,
+      pv
+    };
+    pending.candidateMap.set(rank, candidate);
+    if (rank === 1) pending.bestMove = move;
+  }
+
+  private validateBestMove(fen: string, move: string | null | undefined): string | null {
+    if (!move || move === "(none)" || move.length < 4) return null;
+    const chess = new Chess(fen);
+    const legalMove = chess.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] || "q" });
+    return legalMove ? move : null;
   }
 
   private post(command: string): void {
     this.worker?.postMessage(command);
-  }
-
-  private async fallbackEvaluate(fen: string, depth: number): Promise<EngineEvaluation> {
-    return this.fallbackEvaluateSync(fen, depth);
-  }
-
-  private fallbackEvaluateSync(fen: string, depth: number): EngineEvaluation {
-    const chess = new Chess(fen);
-    const legalMoves = chess.moves({ verbose: true });
-    let bestMove: string | null = legalMoves[0] ? `${legalMoves[0].from}${legalMoves[0].to}${legalMoves[0].promotion ?? ""}` : null;
-    let bestScore = chess.turn() === "w" ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
-
-    for (const move of legalMoves.slice(0, Math.max(legalMoves.length, depth))) {
-      const clone = new Chess(fen);
-      clone.move(move.san);
-      const score = estimatePosition(clone.fen());
-      if ((chess.turn() === "w" && score > bestScore) || (chess.turn() === "b" && score < bestScore)) {
-        bestScore = score;
-        bestMove = `${move.from}${move.to}${move.promotion ?? ""}`;
-      }
-    }
-
-    return {
-      cp: estimatePosition(fen),
-      mate: null,
-      bestMove
-    };
   }
 }
 
@@ -299,45 +291,10 @@ function sideToMove(fen: string): "w" | "b" {
   return fen.split(" ")[1] === "b" ? "b" : "w";
 }
 
-function styleBonus(style: CoachStyle, before: Chess, after: Chess, san: string, uci: string, engineBest: string | null): number {
-  let bonus = engineBest === uci ? 120 : 0;
-  const isCapture = san.includes("x");
-  const givesCheck = san.includes("+") || san.includes("#");
-  const targetFile = uci[2];
-  const targetRank = Number(uci[3]);
-  const center = ["d", "e"].includes(targetFile) && targetRank >= 3 && targetRank <= 6;
-  const development = /^[NB]/.test(san) && before.history().length < 12;
-  const castle = san === "O-O" || san === "O-O-O";
-
-  if (style === "magnus") {
-    bonus += castle ? 70 : 0;
-    bonus += center ? 45 : 0;
-    bonus += development ? 35 : 0;
-    bonus += givesCheck && !isCapture ? -15 : 0;
-    bonus += after.inCheck() ? -30 : 0;
-  } else if (style === "hikaru") {
-    bonus += givesCheck ? 90 : 0;
-    bonus += isCapture ? 45 : 0;
-    bonus += center ? 25 : 0;
-    bonus += development ? 20 : 0;
-  } else if (style === "kasparov") {
-    bonus += center ? 70 : 0;
-    bonus += development ? 55 : 0;
-    bonus += givesCheck ? 45 : 0;
-    bonus += isCapture ? 25 : 0;
-    bonus += castle ? 20 : 0;
-  }
-
-  return bonus;
-}
-
-function explainStyleChoice(style: CoachStyle, move: string | null | undefined): string {
-  const prefix = move ? `${move}: ` : "";
-  const map: Record<CoachStyle, string> = {
-    stockfish: "objektiv bester Engine-Kandidat.",
-    magnus: "Stil-Simulation: solide, positionell und mit Fokus auf langfristigen Druck.",
-    hikaru: "Stil-Simulation: aktiv, taktisch und auf Initiative ausgerichtet.",
-    kasparov: "Stil-Simulation: Raum, Zentrum, Aktivität und Angriffsdruck stehen im Vordergrund."
-  };
-  return `${prefix}${map[style]}`;
+function ensureBestMoveCandidate(candidates: EngineCandidateMove[], bestMove: string): EngineCandidateMove[] {
+  if (candidates.some((candidate) => candidate.move === bestMove)) return candidates;
+  return [{ rank: 1, move: bestMove, cp: null, mate: null, pv: [bestMove] }, ...candidates].map((candidate, index) => ({
+    ...candidate,
+    rank: index + 1
+  }));
 }

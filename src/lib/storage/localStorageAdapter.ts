@@ -7,7 +7,8 @@ export const localStorageAdapter: StorageAdapter = {
     const raw = window.localStorage.getItem(storageKey);
     if (!raw) return [];
     try {
-      return JSON.parse(raw) as StoredGame[];
+      const parsed = JSON.parse(raw) as StoredGame[];
+      return parsed.map((game) => ({ ...game, favorite: Boolean(game.favorite), analysis: game.analysis ?? [] }));
     } catch {
       return [];
     }

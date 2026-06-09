@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CloudDownload, Shield, Upload } from "lucide-react";
+import { CloudDownload, Shield, Star, Upload } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
 import { mergeUniqueGames } from "../lib/chess/dedupe";
 import { parsePgnBatch } from "../lib/chess/pgn";
@@ -7,9 +7,9 @@ import {
   ChessComImportError,
   importChessComGames,
   type ChessComImportFilters,
+  type ChessComPeriod,
   type ChessComProgress,
-  type ChessComTimeClass,
-  type ChessComPeriod
+  type ChessComTimeClass
 } from "../lib/chesscom/client";
 import { loadProfile, saveProfile } from "../lib/storage/profile";
 import type { StoredGame } from "../types";
@@ -17,11 +17,13 @@ import type { StoredGame } from "../types";
 export function UploadPage({
   games,
   onGamesChange,
-  onSelectGame
+  onOpenGame,
+  onToggleFavorite
 }: {
   games: StoredGame[];
   onGamesChange: (games: StoredGame[]) => Promise<void>;
-  onSelectGame: (id: string) => void;
+  onOpenGame: (id: string) => void;
+  onToggleFavorite: (id: string) => Promise<void>;
 }) {
   const [message, setMessage] = useState<string>("");
   const [chessComUsername, setChessComUsername] = useState("");
@@ -50,7 +52,7 @@ export function UploadPage({
 
     const merged = mergeUniqueGames(games, imported);
     await onGamesChange(merged.games);
-    if (merged.added[0]) onSelectGame(merged.added[0].id);
+    if (merged.added[0]) onOpenGame(merged.added[0].id);
     setMessage(`${merged.added.length} Partie(n) importiert. ${merged.skipped} Duplikat(e) übersprungen.`);
   }
 
@@ -70,7 +72,7 @@ export function UploadPage({
       const merged = mergeUniqueGames(games, imported);
       await onGamesChange(merged.games);
       saveProfile({ ...loadProfile(), chessComUsername: username });
-      if (merged.added[0]) onSelectGame(merged.added[0].id);
+      if (merged.added[0]) onOpenGame(merged.added[0].id);
       setMessage(`${merged.added.length} Chess.com Partie(n) importiert. ${merged.skipped} Duplikat(e) übersprungen.`);
     } catch (error) {
       setProgress({ phase: "error", message: getChessComErrorMessage(error) });
@@ -139,11 +141,7 @@ export function UploadPage({
               </select>
             </label>
           </div>
-          <ActionButton
-            onClick={() => void handleChessComImport()}
-            disabled={isImporting}
-            icon={<CloudDownload size={17} />}
-          >
+          <ActionButton onClick={() => void handleChessComImport()} disabled={isImporting} icon={<CloudDownload size={17} />}>
             {isImporting ? "Import läuft..." : "Chess.com Partien importieren"}
           </ActionButton>
         </div>
@@ -153,10 +151,7 @@ export function UploadPage({
             {progress.monthTotal && (
               <div className="mt-3">
                 <div className="h-2 rounded-full bg-white dark:bg-stone-950">
-                  <div
-                    className="h-2 rounded-full bg-[#5f8f45]"
-                    style={{ width: `${Math.round(((progress.monthIndex ?? 0) / progress.monthTotal) * 100)}%` }}
-                  />
+                  <div className="h-2 rounded-full bg-[#5f8f45]" style={{ width: `${Math.round(((progress.monthIndex ?? 0) / progress.monthTotal) * 100)}%` }} />
                 </div>
                 <p className="mt-2 text-xs text-stone-500">
                   Archive gefunden: {progress.archivesFound ?? progress.monthTotal} · Importiert: {progress.importedCount ?? 0}
@@ -174,27 +169,33 @@ export function UploadPage({
         </div>
         <div className="grid gap-3">
           {games.map((game) => (
-            <button
-              type="button"
-              key={game.id}
-              className="rounded-md border border-stone-200 p-4 text-left transition hover:border-[#5f8f45] hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-950"
-              onClick={() => onSelectGame(game.id)}
-            >
+            <article key={game.id} className="rounded-md border border-stone-200 p-4 transition hover:border-[#5f8f45] hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-950">
               <div className="flex items-start gap-3">
-                <span className="mt-1 grid h-9 w-9 place-items-center rounded-md bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300">
-                  <Shield size={18} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-medium">
-                    {game.metadata.white} gegen {game.metadata.black}
+                <button
+                  type="button"
+                  onClick={() => void onToggleFavorite(game.id)}
+                  className={`mt-1 grid h-9 w-9 place-items-center rounded-md ${game.favorite ? "bg-[#fff7df] text-[#b88700]" : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-300"}`}
+                  aria-label={game.favorite ? "Favorit entfernen" : "Als Favorit markieren"}
+                  title={game.favorite ? "Favorit entfernen" : "Als Favorit markieren"}
+                >
+                  <Star size={18} fill={game.favorite ? "currentColor" : "none"} />
+                </button>
+                <button type="button" className="flex min-w-0 flex-1 items-start gap-3 text-left" onClick={() => onOpenGame(game.id)}>
+                  <span className="mt-1 grid h-9 w-9 place-items-center rounded-md bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                    <Shield size={18} />
                   </span>
-                  <span className="mt-1 block text-sm text-stone-500">
-                    {game.metadata.result} · {game.metadata.date || "ohne Datum"} · {game.metadata.timeControl || "ohne Zeitkontrolle"}
+                  <span className="min-w-0">
+                    <span className="block font-medium">
+                      {game.metadata.white} gegen {game.metadata.black}
+                    </span>
+                    <span className="mt-1 block text-sm text-stone-500">
+                      {game.metadata.result} · {game.metadata.date || "ohne Datum"} · {game.metadata.timeControl || "ohne Zeitkontrolle"}
+                    </span>
+                    <span className="mt-1 block text-sm text-stone-500">{game.metadata.opening || "Eröffnung nicht im PGN"}</span>
                   </span>
-                  <span className="mt-1 block text-sm text-stone-500">{game.metadata.opening || "Eröffnung nicht im PGN"}</span>
-                </span>
+                </button>
               </div>
-            </button>
+            </article>
           ))}
         </div>
       </section>
