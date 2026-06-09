@@ -12,7 +12,7 @@ import { useKeyboardNavigation } from "../components/useKeyboardNavigation";
 import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
 import { buildCoachProfile } from "../lib/analysis/profile";
 import { judgeMove, neutralJudgement } from "../lib/analysis/moveJudgement";
-import { buildSquareStyles, candidatesToArrows, canSelectPiece, formatEval, pieceColorAt, tryMove } from "../lib/chess/boardUi";
+import { boardColorsFor, buildSquareStyles, candidatesToArrows, canSelectPiece, formatEval, pieceColorAt, tryMove } from "../lib/chess/boardUi";
 import { engineUnavailableMessage, stockfishService } from "../lib/stockfish/StockfishService";
 import type { AppSettings, EngineCandidateMove, MoveJudgement, StoredGame } from "../types";
 
@@ -53,7 +53,7 @@ export function PlayPage({
   const [boardVersion, setBoardVersion] = useState(0);
   const [lastUserEntry, setLastUserEntry] = useState<CoachHistoryEntry | null>(null);
   const [lastCoachReply, setLastCoachReply] = useState<CoachHistoryEntry | null>(null);
-  const board = useResponsiveBoardWidth(settings.coachSettingsCollapsed ? 560 : 430);
+  const board = useResponsiveBoardWidth(settings.coachSettingsCollapsed ? 500 : 400);
   const profile = useMemo(() => buildCoachProfile(games), [games]);
   const current = history[currentPly] ?? history[history.length - 1];
   const position = current.fen;
@@ -66,6 +66,10 @@ export function PlayPage({
     [position, selectedSquare, settings.showLegalMoves]
   );
   const arrows = useMemo(() => candidatesToArrows(suggestions), [suggestions]);
+  const boardColors = useMemo(
+    () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
+    [settings.boardTheme, settings.colorTheme, settings.darkMode]
+  );
 
   useKeyboardNavigation({ enabled: true, current: currentPly, max: history.length - 1, onChange: setCurrentPly });
 
@@ -234,7 +238,7 @@ export function PlayPage({
   }
 
   return (
-    <div className={settings.coachSettingsCollapsed ? "grid gap-6 xl:grid-cols-[minmax(480px,700px)_minmax(280px,1fr)]" : "grid gap-6 lg:grid-cols-[440px_1fr]"}>
+    <div className={settings.coachSettingsCollapsed ? "grid gap-5 xl:grid-cols-[minmax(460px,620px)_minmax(300px,1fr)]" : "grid gap-5 lg:grid-cols-[420px_1fr]"}>
       <section className="grid gap-3">
         <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm font-medium text-[var(--color-text)]">
           {isThinking ? "Coach denkt ..." : coachNote}
@@ -259,17 +263,16 @@ export function PlayPage({
                 areArrowsAllowed={false}
                 autoPromoteToQueen
                 animationDuration={180}
-                customDarkSquareStyle={{ backgroundColor: "#769656" }}
-                customLightSquareStyle={{ backgroundColor: "#eeeed2" }}
+                customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+                customLightSquareStyle={{ backgroundColor: boardColors.light }}
               />
             </div>
           </div>
           <BoardControls current={currentPly} max={history.length - 1} onChange={setCurrentPly} />
         </div>
-        <MoveSuggestionPanel candidates={suggestions} isLoading={isSuggesting} error={suggestionError} />
       </section>
 
-      <section className={settings.coachSettingsCollapsed ? "grid content-start gap-4 xl:pt-20" : "grid gap-4"}>
+      <section className="grid content-start gap-4">
         <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-2xl font-semibold">Gegen Coach spielen</h1>
@@ -341,6 +344,7 @@ export function PlayPage({
             </ActionButton>
           </div>
         </div>
+        <MoveSuggestionPanel candidates={suggestions} isLoading={isSuggesting} error={suggestionError} />
       </section>
     </div>
   );

@@ -14,7 +14,7 @@ import { useKeyboardNavigation } from "../components/useKeyboardNavigation";
 import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
 import { analyzeGame } from "../lib/analysis/analyzeGame";
 import { judgeMove } from "../lib/analysis/moveJudgement";
-import { buildSquareStyles, candidatesToArrows, canSelectPiece, formatEval, pieceColorAt, tryMove } from "../lib/chess/boardUi";
+import { boardColorsFor, buildSquareStyles, candidatesToArrows, canSelectPiece, formatEval, pieceColorAt, tryMove } from "../lib/chess/boardUi";
 import { engineUnavailableMessage, stockfishService } from "../lib/stockfish/StockfishService";
 import type { AnalysisDepth, AppSettings, EngineCandidateMove, StoredGame } from "../types";
 
@@ -24,7 +24,8 @@ export function ViewerPage({
   onSelectGame,
   onGamesChange,
   onUpload,
-  settings
+  settings,
+  initialPly
 }: {
   games: StoredGame[];
   selectedGame: StoredGame | null;
@@ -32,6 +33,7 @@ export function ViewerPage({
   onGamesChange: (games: StoredGame[]) => Promise<void>;
   onUpload: () => void;
   settings: AppSettings;
+  initialPly?: number;
 }) {
   const [activePly, setActivePly] = useState(0);
   const [depth, setDepth] = useState<AnalysisDepth>("normal");
@@ -48,6 +50,10 @@ export function ViewerPage({
   const [boardVersion, setBoardVersion] = useState(0);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const board = useResponsiveBoardWidth(panelCollapsed ? 560 : 430);
+  const boardColors = useMemo(
+    () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
+    [settings.boardTheme, settings.colorTheme, settings.darkMode]
+  );
 
   const maxPly = selectedGame?.moves.length ?? 0;
   const mainPosition = useMemo(() => buildPosition(selectedGame, activePly), [selectedGame, activePly]);
@@ -70,6 +76,11 @@ export function ViewerPage({
   const arrows = useMemo(() => candidatesToArrows(suggestions), [suggestions]);
 
   useKeyboardNavigation({ enabled: true, current: activePly, max: maxPly, onChange: setPly });
+
+  useEffect(() => {
+    if (initialPly === undefined) return;
+    setActivePly(Math.max(0, Math.min(maxPly, initialPly)));
+  }, [initialPly, maxPly, selectedGame?.id]);
 
   useEffect(() => {
     setSelectedSquare(null);
@@ -209,8 +220,8 @@ export function ViewerPage({
                 areArrowsAllowed={false}
                 autoPromoteToQueen
                 animationDuration={180}
-                customDarkSquareStyle={{ backgroundColor: "#769656" }}
-                customLightSquareStyle={{ backgroundColor: "#eeeed2" }}
+                customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+                customLightSquareStyle={{ backgroundColor: boardColors.light }}
               />
             </div>
           </div>

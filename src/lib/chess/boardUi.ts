@@ -1,8 +1,12 @@
 import { Chess, type Move, type Square } from "chess.js";
-import type { CapturedMaterial, EngineCandidateMove } from "../../types";
+import type { BoardTheme, CapturedMaterial, ColorTheme, EngineCandidateMove } from "../../types";
 
 export type BoardArrow = [Square, Square, string?];
 export type SquareStyles = Partial<Record<Square, Record<string, string | number>>>;
+export interface BoardPalette {
+  light: string;
+  dark: string;
+}
 
 export function uciToArrow(move: string | null | undefined, color = "rgba(212, 175, 55, 0.82)"): BoardArrow[] {
   if (!move || move.length < 4) return [];
@@ -112,9 +116,29 @@ export function materialFromFen(fen: string): CapturedMaterial {
 
 export function formatEval(cp: number | null, mate: number | null): string {
   if (mate !== null) return `M${Math.abs(mate)}`;
-  if (cp === null) return "–";
+  if (cp === null) return "-";
   const pawns = cp / 100;
   return `${pawns >= 0 ? "+" : ""}${pawns.toFixed(1)}`;
+}
+
+export function boardColorsFor(boardTheme: BoardTheme, colorTheme: ColorTheme, darkMode: boolean): BoardPalette {
+  const resolved = boardTheme === "auto" ? autoBoardTheme(colorTheme, darkMode) : boardTheme;
+  const palettes: Record<Exclude<BoardTheme, "auto">, BoardPalette> = {
+    green: { light: "#eeeed2", dark: "#769656" },
+    wood: { light: "#ead7b7", dark: "#b4875d" },
+    gray: { light: "#d8d8d2", dark: "#8b9084" },
+    blueGray: { light: "#d7e0df", dark: "#7895a3" },
+    dark: { light: "#b8aea0", dark: "#5a5248" }
+  };
+  return palettes[resolved];
+}
+
+function autoBoardTheme(colorTheme: ColorTheme, darkMode: boolean): Exclude<BoardTheme, "auto"> {
+  if (colorTheme === "blueGray") return "blueGray";
+  if (colorTheme === "gray") return "gray";
+  if (colorTheme === "wood" || colorTheme === "nightBrown" || colorTheme === "gold") return "wood";
+  if (darkMode && colorTheme === "purple") return "dark";
+  return "green";
 }
 
 function missingPieces(remaining: Record<string, number>, starting: Record<string, number>, color: "w" | "b"): string[] {

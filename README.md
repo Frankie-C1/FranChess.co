@@ -1,6 +1,6 @@
 # FranChess.co
 
-FranChess.co ist eine kostenlose Open-Source-Schachtrainer-Webapp für PGN-Import, Chess.com-Import, lokale Analyse, Fehlerprofile, Training und Coach-Export.
+FranChess.co ist eine kostenlose Open-Source-Schachtrainer-Webapp fuer PGN-Import, Chess.com-Import, lokale Analyse, Fehlerprofile, Training, Coach-Modus und Coach-Export.
 
 ## Installation
 
@@ -17,75 +17,97 @@ npm run build
 
 ## Stockfish Setup
 
-FranChess.co benötigt echte Stockfish-WASM-Dateien. Beim Build kopiert `npm run prepare:stockfish` die Browser-Variante aus dem npm-Paket `stockfish@18.0.7` in den Public-Ordner:
+FranChess.co benoetigt echte Stockfish-WASM-Dateien. Beim Build kopiert `npm run prepare:stockfish` die Browser-Variante aus dem npm-Paket `stockfish@18.0.7` in den Public-Ordner:
 
 ```text
 public/stockfish/stockfish.js
 public/stockfish/stockfish.wasm
 ```
 
-Diese Variante ist WASM, single-threaded und braucht keine Cross-Origin-Isolation-Header. FranChess.co lädt `public/stockfish/stockfish.js` als WebWorker; der Worker lädt `stockfish.wasm` aus demselben Ordner.
-
-Wichtig: Es gibt keinen Fake-Fallback mehr. Wenn Stockfish nicht geladen werden kann, zeigt die App:
-
-```text
-Stockfish konnte nicht geladen werden. Bitte Engine-Dateien prüfen.
-```
-
-Analyse, Coach-Züge und Zugvorschläge werden dann nicht durch Material- oder Mobilitätsheuristiken ersetzt.
-
-## Supabase Optional
-
-Ohne ENV-Variablen nutzt FranChess.co `localStorage`. Optional:
-
-```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
-
-Der Tabellenentwurf liegt in `src/lib/storage/supabase.ts` als `supabaseSchemaSql`.
+Es gibt keinen Fake-Fallback. Wenn Stockfish nicht geladen werden kann, zeigt die App eine klare Fehlermeldung und ersetzt Analyse, Coach-Zuege oder Vorschlaege nicht durch Material- oder Mobilitaetsheuristiken.
 
 ## Aktuelle Funktionen
 
 - PGN-Dateien importieren und lokal speichern
-- öffentliche Chess.com-Partien per PubAPI oder Netlify Function Proxy importieren
-- Chess.com-Duplikate anhand Partie-URL oder Metadaten/Zugliste vermeiden
-- echte Stockfish-WASM-Analyse ohne Fake-Heuristik
-- gespeicherte Engine-Elo: 800 bis 2200 oder Maximal
-- UCI_LimitStrength/UCI_Elo, wenn die verwendete Stockfish-Version diese Optionen meldet
-- MultiPV/Top-5-Zugvorschläge, wenn Stockfish MultiPV meldet
-- Dashboard mit Winrate, CPL, Fehlerphasen, Farben und Eröffnungen
-- Viewer mit Brett, Zugliste, Bewertungsgrafik, Bewertungsbalken, Materialanzeige und Fehlerdetails
-- anklickbare Zugliste, Vor-/Zurück-Buttons und synchronisierte Bewertungskurve
-- temporäre Varianten im Viewer, ohne die Originalpartie zu verändern
-- dezente Engine-Pfeile für Top-Züge
-- Klick-zu-Klick-Ziehen zusätzlich zu Drag-and-drop
-- optionale Markierung legaler Zielfelder
-- Favoriten per Stern in der Partienliste und in den Einstellungen
-- Einstellungen-Tab mit persistentem Dark Mode, Engine-Elo, Brett- und Coach-Optionen
-- Coach-Modus mit Weiß/Schwarz-Wahl vor Spielstart, Board-Drehung für Schwarz, Verlauf und Navigationsbuttons
-- Coach-Einstellungen auf Desktop einklappbar, damit das Brett größer wird
-- Move-Judgement-Labels: `!!`, `!`, `□`, `!?`, `?!`, `?`, `??`
-- Button „Zug vorschlagen“ im Viewer und Coach mit Top-5-Liste und Pfeilen
-- Trainingsaufgaben aus eigenen Fehlern erzeugen
+- oeffentliche Chess.com-Partien per PubAPI oder Netlify Function Proxy importieren
+- echte Stockfish-WASM-Analyse mit Engine-Elo und MultiPV/Top-5-Vorschlaegen
+- Dashboard, Viewer, Coach, Training, Export und Einstellungen
+- Viewer mit Brettnavigation, Zugliste, Bewertungsgrafik, Bewertungsbalken, Materialanzeige, Fehlerdetails und Varianten
+- Coach-Modus mit Weiss/Schwarz-Wahl, Verlauf, Tastatur-/Buttonnavigation, Bewertung, Top-Zugvorschlaegen und natuerlichem Antwort-Delay
+- Favoriten per Stern in Partienlisten und in den Einstellungen
+- Klick-zu-Klick-Ziehen, Drag-and-drop und optionale Markierung legaler Zielfelder
 - Coach-Export als ZIP mit `games.pgn`, `analysis.json`, `mistakes.csv`, `profile.json`, `summary.md`
 - Netlify Build via `netlify.toml`
 
-## Einstellungen und Storage
+## Theme-System
 
-Die App speichert Einstellungen lokal unter `franchess.settings.v1`.
+Einstellungen werden lokal unter `franchess.settings.v1` gespeichert. Neue Nutzer starten im Dark Mode; vorhandene Einstellungen werden respektiert.
 
-- `darkMode`: bleibt nach Reload, App-Neustart und Netlify-Reload erhalten
-- `showLegalMoves`: zeigt nach Auswahl einer Figur dezente legale Zielpunkte
-- `allowOpponentMoves`: vorbereitet für Analyse- und Variantenmodus; echtes Coach-Spiel bleibt geschützt
-- `engineElo`: Coach-Stärke und Vorschlagsstärke
-- `coachSettingsCollapsed`: Desktop-Layoutzustand im Coach
+Verfuegbare Farbpaletten:
 
-Favoriten werden direkt im gespeicherten Game-Datensatz als `favorite: true` abgelegt. Alte gespeicherte Partien ohne dieses Feld bleiben lesbar und werden beim Laden als nicht favorisiert behandelt.
+- Standard Gruen/Braun
+- Schwarz/Gold
+- Schwarz/Lila
+- Klassisch Holz
+- Minimal Grau
+- Blau/Grau
+- Turnier Gruen
+- Nacht Braun
+
+Dark/Light Mode bleibt eine eigene Einstellung. Die Farbpalette steuert Akzente, Flaechen, Buttons, aktive Tabs und App-Navigation ueber CSS-Variablen.
+
+## Brettdesign
+
+Viewer und Coach nutzen eine gemeinsame gespeicherte Brettfarbe:
+
+- Automatisch nach App-Theme
+- Klassisch Gruen
+- Braun/Holz
+- Grau
+- Blau/Grau
+- Dunkel
+
+Legal-Move-Dots, Pfeile und Markierungen bleiben dezent und auf den Paletten lesbar.
+
+## Layout-Modus
+
+Der Layout-Modus ist persistent:
+
+- `Automatisch`: Handy nutzt Bottom-Bar, Desktop nutzt Top-Navigation.
+- `Web/Layout oben`: Top-Navigation auf allen Geraeten.
+- `Mobile Layout unten`: Bottom-Bar auch auf Desktop/Laptop erzwingen.
+
+Die Bottom-Bar beruecksichtigt Safe Areas und ist etwas deckender, damit sie mehr wie eine native App-Leiste wirkt.
+
+## Training, Puzzles und Eroeffnungen
+
+Der Training-Tab ist in drei Bereiche gegliedert:
+
+- `Training`: Aufgaben aus eigenen analysierten Partien. Ein Klick oeffnet die passende Partie im Viewer.
+- `Puzzles`: echte Lichess-Puzzle-Daten aus einem lokalen Import.
+- `Eroeffnungen`: importierte PGNs als trainierbare Hauptvarianten mit Kommentaren.
+
+### Lichess Puzzle Database importieren
+
+FranChess.co nutzt keine Chess.com-Puzzle-Daten und scrapet keine Websites. Die Lichess Puzzle Database ist offiziell frei verfuegbar und laut Lichess unter Creative Commons CC0 veroeffentlicht: https://database.lichess.org/
+
+Die komplette CSV ist zu gross fuer das Frontend. Lade sie lokal herunter, entpacke sie und erzeuge einen kleinen Datensatz:
+
+```bash
+node scripts/import-lichess-puzzles.mjs path/to/lichess_db_puzzle.csv public/data/puzzles.json 1000
+```
+
+Der Importer filtert auf typische Trainingsthemen wie `fork`, `pin`, `mate`, `hangingPiece`, `endgame`, `advantage`, `crushing`, `discoveredAttack` und `opening`. Wenn `public/data/puzzles.json` fehlt, zeigt die App eine Import-Anleitung statt Fake-Puzzles.
+
+### Eroeffnungs-PGN importieren
+
+Im Bereich `Eroeffnungen` kann ein eigenes PGN eingefuegt werden. Die Hauptvariante wird trainierbar, Kommentare in `{ ... }` werden als Hinweise angezeigt und lokal gespeichert.
+
+Bitte keine fremden Lichess Studies, Nutzertexte oder fremde Kommentare ungeprueft kopieren. Eigene PGNs, eigene Study-Exports oder frei lizenzierte PGNs sind der saubere Weg.
 
 ## Chess.com Auto-Import
 
-Im Upload-Bereich kann ein Chess.com Username eingetragen werden. FranChess.co nutzt ausschließlich die offizielle öffentliche PubAPI:
+Im Upload-Bereich kann ein Chess.com Username eingetragen werden. FranChess.co nutzt die offizielle oeffentliche PubAPI:
 
 ```text
 https://api.chess.com/pub/player/{username}/games/archives
@@ -98,25 +120,18 @@ Falls der Browser direkte PubAPI-Anfragen blockiert, nutzt FranChess.co den Netl
 /api/chesscom?url=...
 ```
 
-Der Proxy erlaubt nur URLs unter `https://api.chess.com/pub/`. Für einen lokalen Test des Proxy-Pfads nutze Netlify Dev statt reinem Vite:
+Der Proxy erlaubt nur URLs unter `https://api.chess.com/pub/`. Fuer einen lokalen Test des Proxy-Pfads nutze Netlify Dev statt reinem Vite:
 
 ```bash
 netlify dev
 ```
 
-## Analysekommentare
-
-Die Fehlerdiagnose ist regelbasiert und nutzt vorhandene Engine-Werte, FEN-Stellungen und einfache Muster. Aktuell werden unter anderem hängende Figuren, ungedeckte Figuren, Königssicherheit, Entwicklung, frühe Damenzüge, wiederholte Figurenbewegungen, verpasste Taktiken, Mattchancen, Abtauschfehler, Bauernstruktur und Endspielfehler klassifiziert.
-
-Move-Judgement-Labels werden aus Centipawn Loss, bestem Enginezug, vorhandenen Kategorien und optionalen Top-Kandidaten abgeleitet.
-
 ## Bekannte Grenzen
 
-- MultiPV hängt davon ab, ob die konkrete Stockfish-WASM-Version `MultiPV` als UCI-Option meldet. Wenn nicht, zeigt die UI nur den besten Zug.
-- UCI_Elo hängt davon ab, ob die konkrete Stockfish-WASM-Version `UCI_Elo` und `UCI_LimitStrength` meldet. Wenn nicht, wird kein Zufallszug erzeugt; die App zeigt den Status und nutzt normale Engine-Suchtiefe.
-- Varianten im Viewer sind temporär und werden noch nicht dauerhaft als eigener Baum gespeichert.
-- Der Button „Als Training speichern“ markiert die aktuelle Stellung im UI, schreibt aber noch keine neue persistente Trainingssammlung.
-- Taktikkategorien wie Fork, Pin und Skewer sind Näherungen aus Engine-Hinweisen und Zuggeometrie.
-- PGN-Zeitdaten werden nur erkannt, wenn Clock-Kommentare im PGN vorhanden sind.
-- Sehr große Chess.com Accounts können viele Monatsarchive haben; bei Rate-Limits bitte später erneut importieren.
+- MultiPV haengt davon ab, ob die konkrete Stockfish-WASM-Version `MultiPV` als UCI-Option meldet.
+- UCI_Elo haengt davon ab, ob die Stockfish-Version `UCI_Elo` und `UCI_LimitStrength` meldet.
+- Varianten im Viewer und Coach sind noch keine dauerhaft gespeicherten Variantenbaeume.
+- Der Puzzle-Bereich benoetigt eine lokal erzeugte `public/data/puzzles.json`; es wird kein grosser Lichess-Datensatz gebundelt.
+- Der Eroeffnungsbereich trainiert aktuell die Hauptvariante und zeigt PGN-Kommentare; vollstaendige Variantenbaum-UI ist vorbereitet, aber noch nicht ausgebaut.
+- Der Button `Als Training speichern` markiert im Viewer noch nicht dauerhaft eine eigene Trainingssammlung.
 - Supabase ist vorbereitet, aber lokaler Speicher bleibt der robuste Standardpfad.

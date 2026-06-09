@@ -1,19 +1,26 @@
 import { useState, type ReactNode } from "react";
 import { Crown, Menu, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { CoachView } from "../types";
+import type { CoachView, LayoutMode } from "../types";
 import { BrandLogo } from "./BrandLogo";
 
 interface LayoutProps {
   nav: Array<{ id: CoachView; label: string; icon: LucideIcon }>;
   view: CoachView;
   onNavigate: (view: CoachView) => void;
+  layoutMode: LayoutMode;
   utility?: ReactNode;
   children: ReactNode;
 }
 
-export function Layout({ nav, view, onNavigate, utility, children }: LayoutProps) {
+export function Layout({ nav, view, onNavigate, layoutMode, utility, children }: LayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const forceTop = layoutMode === "top";
+  const forceBottom = layoutMode === "bottom";
+  const bottomVisibility = forceBottom ? "" : "md:hidden";
+  const bottomHidden = forceTop ? "hidden" : bottomVisibility;
+  const topGridVisibility = forceBottom ? "hidden" : forceTop ? "grid" : "hidden md:grid lg:hidden";
+  const mainPadding = forceTop ? "pb-6" : forceBottom ? "pb-28" : "pb-28 md:pb-6";
 
   function navigate(nextView: CoachView) {
     onNavigate(nextView);
@@ -31,7 +38,7 @@ export function Layout({ nav, view, onNavigate, utility, children }: LayoutProps
               <span className="block text-left text-xs text-[var(--color-muted)]">Analyse. Training. Fortschritt.</span>
             </span>
           </button>
-          <nav className="ml-auto hidden items-center gap-1 lg:flex">
+          <nav className={`ml-auto items-center gap-1 ${forceBottom ? "hidden" : "hidden lg:flex"}`}>
             {nav.map((item) => {
               const Icon = item.icon;
               const active = view === item.id;
@@ -54,14 +61,15 @@ export function Layout({ nav, view, onNavigate, utility, children }: LayoutProps
           </nav>
           {utility}
         </div>
-        <div className="mx-auto hidden max-w-7xl grid-cols-4 gap-1 px-4 pb-3 sm:px-6 md:grid lg:hidden">
+
+        <div className={`mx-auto max-w-7xl grid-cols-4 gap-1 px-4 pb-3 sm:px-6 ${topGridVisibility}`}>
           {nav.map((item) => {
             const Icon = item.icon;
             const active = view === item.id;
             return (
               <button
-                  type="button"
-                  key={item.id}
+                type="button"
+                key={item.id}
                 onClick={() => navigate(item.id)}
                 className={`inline-flex h-9 min-w-0 items-center justify-center gap-1 overflow-hidden rounded-md px-2 text-xs ${
                   active
@@ -76,17 +84,20 @@ export function Layout({ nav, view, onNavigate, utility, children }: LayoutProps
           })}
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6 pb-28 sm:px-6 md:pb-6 lg:py-8">{children}</main>
+
+      <main className={`mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8 ${mainPadding}`}>{children}</main>
+
       {menuOpen && (
         <button
           type="button"
-          aria-label="Menü schließen"
-          className="fixed inset-0 z-30 bg-stone-950/20 backdrop-blur-[1px] md:hidden"
+          aria-label="Menue schliessen"
+          className={`fixed inset-0 z-30 bg-stone-950/20 backdrop-blur-[1px] ${bottomVisibility}`}
           onClick={() => setMenuOpen(false)}
         />
       )}
+
       <div
-        className={`fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+76px)] z-40 origin-bottom rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl transition md:hidden ${
+        className={`fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+76px)] z-40 origin-bottom rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl transition ${bottomHidden} ${
           menuOpen ? "scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
         }`}
       >
@@ -107,7 +118,8 @@ export function Layout({ nav, view, onNavigate, utility, children }: LayoutProps
           })}
         </div>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 shadow-[0_-8px_28px_rgba(0,0,0,0.12)] backdrop-blur md:hidden">
+
+      <nav className={`fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-surface)]/98 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 shadow-[0_-8px_28px_rgba(0,0,0,0.12)] backdrop-blur ${bottomHidden}`}>
         <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
           <MobileNavButton nav={nav} id="viewer" view={view} onNavigate={navigate} />
           <MobileNavButton nav={nav} id="dashboard" view={view} onNavigate={navigate} label="Analyse" />
@@ -130,10 +142,10 @@ export function Layout({ nav, view, onNavigate, utility, children }: LayoutProps
             className={`inline-flex h-14 flex-col items-center justify-center gap-1 rounded-md text-xs transition ${
               menuOpen ? "text-[var(--color-accent)]" : "text-[var(--color-muted)]"
             }`}
-            aria-label={menuOpen ? "Menü schließen" : "Menü öffnen"}
+            aria-label={menuOpen ? "Menue schliessen" : "Menue oeffnen"}
           >
             {menuOpen ? <X size={20} /> : <Menu size={20} />}
-            Menü
+            Menue
           </button>
         </div>
       </nav>

@@ -10,14 +10,14 @@
 
 :root {
   color-scheme: light;
-  --color-bg: #f4f1ea;
-  --color-surface: #ffffff;
-  --color-surface-2: #ede8dc;
-  --color-text: #1c1917;
-  --color-muted: #6b6259;
-  --color-border: #e7dfd2;
-  --color-accent: #5f8f45;
-  --color-accent-2: #4f7939;
+  --color-bg: #f3efe4;
+  --color-surface: #fffdf8;
+  --color-surface-2: #e8dfcf;
+  --color-text: #211d17;
+  --color-muted: #70685b;
+  --color-border: #ddd1bf;
+  --color-accent: #6a8f3f;
+  --color-accent-2: #4f6f31;
   --color-accent-contrast: #ffffff;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -33,18 +33,24 @@ html {
 
 .dark {
   color-scheme: dark;
-  --color-bg: #0c0a09;
-  --color-surface: #1c1917;
-  --color-surface-2: #292524;
-  --color-text: #f5f5f4;
-  --color-muted: #a8a29e;
-  --color-border: #44403c;
-  --color-accent: #d6a934;
-  --color-accent-2: #9f7a18;
-  --color-accent-contrast: #1c1503;
+  --color-bg: #10110d;
+  --color-surface: #1b1b15;
+  --color-surface-2: #28261d;
+  --color-text: #f2efe6;
+  --color-muted: #b6ad9a;
+  --color-border: #3f3a2e;
+  --color-accent: #8faa52;
+  --color-accent-2: #6f8c3f;
+  --color-accent-contrast: #10110d;
 }
 
 :root[data-theme="gold"] {
+  --color-bg: #f4f1ea;
+  --color-surface: #fffdf8;
+  --color-surface-2: #ece3d1;
+  --color-text: #211d17;
+  --color-muted: #6c6253;
+  --color-border: #e0d4be;
   --color-accent: #b88700;
   --color-accent-2: #8f6a12;
   --color-accent-contrast: #ffffff;
@@ -61,8 +67,14 @@ html {
 }
 
 :root[data-theme="purple"] {
-  --color-accent: #7c3aed;
-  --color-accent-2: #6d28d9;
+  --color-bg: #f2f0f6;
+  --color-surface: #fff;
+  --color-surface-2: #e7e1f0;
+  --color-text: #1f1b29;
+  --color-muted: #655f70;
+  --color-border: #ddd4e8;
+  --color-accent: #7353a1;
+  --color-accent-2: #5c4185;
   --color-accent-contrast: #ffffff;
 }
 
@@ -74,6 +86,126 @@ html {
   --color-accent: #a78bfa;
   --color-accent-2: #8b5cf6;
   --color-accent-contrast: #160c2f;
+}
+
+:root[data-theme="wood"] {
+  --color-bg: #f1eadc;
+  --color-surface: #fffaf1;
+  --color-surface-2: #e2d3bb;
+  --color-text: #2a2117;
+  --color-muted: #756653;
+  --color-border: #d7c5aa;
+  --color-accent: #8b6239;
+  --color-accent-2: #6e4a2a;
+  --color-accent-contrast: #ffffff;
+}
+
+:root.dark[data-theme="wood"] {
+  --color-bg: #14100b;
+  --color-surface: #201912;
+  --color-surface-2: #2e2419;
+  --color-text: #f2eadf;
+  --color-muted: #b8aa99;
+  --color-border: #4a3a2a;
+  --color-accent: #b58452;
+  --color-accent-2: #8b6239;
+  --color-accent-contrast: #17100a;
+}
+
+:root[data-theme="gray"] {
+  --color-bg: #f0efec;
+  --color-surface: #ffffff;
+  --color-surface-2: #e1dfda;
+  --color-text: #20201d;
+  --color-muted: #66645f;
+  --color-border: #d7d4cc;
+  --color-accent: #66705f;
+  --color-accent-2: #4e5749;
+  --color-accent-contrast: #ffffff;
+}
+
+:root.dark[data-theme="gray"] {
+  --color-bg: #10110f;
+  --color-surface: #1b1c19;
+  --color-surface-2: #262823;
+  --color-text: #f0eee8;
+  --color-muted: #aaa79d;
+  --color-border: #3d4038;
+  --color-accent: #9aa28d;
+  --color-accent-2: #737d68;
+  --color-accent-contrast: #10110f;
+}
+
+:root[data-theme="blueGray"] {
+  --color-bg: #eef2f3;
+  --color-surface: #ffffff;
+  --color-surface-2: #dce5e7;
+  --color-text: #172126;
+  --color-muted: #5f6b70;
+  --color-border: #cfdbde;
+  --color-accent: #4d7182;
+  --color-accent-2: #3e5d6b;
+  --color-accent-contrast: #ffffff;
+}
+
+:root.dark[data-theme="blueGray"] {
+  --color-bg: #0d1316;
+  --color-surface: #182126;
+  --color-surface-2: #223038;
+  --color-text: #edf4f5;
+  --color-muted: #a2b0b6;
+  --color-border: #354750;
+  --color-accent: #7fa3b2;
+  --color-accent-2: #5e8595;
+  --color-accent-contrast: #0d1316;
+}
+
+:root[data-theme="tournamentGreen"] {
+  --color-bg: #edf2e7;
+  --color-surface: #fffef9;
+  --color-surface-2: #dfe9d6;
+  --color-text: #182014;
+  --color-muted: #637058;
+  --color-border: #ceddc3;
+  --color-accent: #4f7f36;
+  --color-accent-2: #3d6529;
+  --color-accent-contrast: #ffffff;
+}
+
+:root.dark[data-theme="tournamentGreen"] {
+  --color-bg: #0d120b;
+  --color-surface: #172014;
+  --color-surface-2: #22301d;
+  --color-text: #eff4ea;
+  --color-muted: #aebca4;
+  --color-border: #33452d;
+  --color-accent: #82a960;
+  --color-accent-2: #628848;
+  --color-accent-contrast: #0d120b;
+}
+
+:root[data-theme="nightBrown"] {
+  --color-bg: #f0ebe4;
+  --color-surface: #fffdf8;
+  --color-surface-2: #e3d8cb;
+  --color-text: #231d18;
+  --color-muted: #6e6258;
+  --color-border: #d9cbbd;
+  --color-accent: #7a6047;
+  --color-accent-2: #5d4936;
+  --color-accent-contrast: #ffffff;
+}
+
+:root.dark[data-theme="nightBrown"] {
+  --color-bg: #100d0b;
+  --color-surface: #1c1713;
+  --color-surface-2: #2a211a;
+  --color-text: #f2ebe4;
+  --color-muted: #b5a79b;
+  --color-border: #403329;
+  --color-accent: #a48668;
+  --color-accent-2: #80654d;
+  --color-accent-contrast: #100d0b;
 }
 
 body {
@@ -167,4 +299,19 @@ canvas {
 
 .move-pill:hover {
   transform: translateY(-1px);
+}
+
+@keyframes splashPulse {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(0) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }

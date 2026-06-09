@@ -25,11 +25,11 @@
         try {
           const raw = localStorage.getItem("franchess.settings.v1");
           const stored = raw ? JSON.parse(raw) : null;
-          const darkMode = stored?.darkMode ?? matchMedia("(prefers-color-scheme: dark)").matches;
+          const darkMode = stored?.darkMode ?? true;
           document.documentElement.classList.toggle("dark", Boolean(darkMode));
           document.documentElement.dataset.theme = stored?.colorTheme || "standard";
         } catch {
-          document.documentElement.classList.toggle("dark", matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", true);
           document.documentElement.dataset.theme = "standard";
         }
       })();

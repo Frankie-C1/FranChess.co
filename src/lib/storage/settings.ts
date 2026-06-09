@@ -3,12 +3,14 @@ import type { AppSettings } from "../../types";
 export const settingsKey = "franchess.settings.v1";
 
 export const defaultSettings: AppSettings = {
-  darkMode: false,
+  darkMode: true,
   showLegalMoves: true,
   allowOpponentMoves: false,
   engineElo: 1200,
   coachSettingsCollapsed: false,
-  colorTheme: "standard"
+  colorTheme: "standard",
+  boardTheme: "auto",
+  layoutMode: "auto"
 };
 
 export function loadSettings(): AppSettings {
@@ -16,10 +18,7 @@ export function loadSettings(): AppSettings {
 
   const raw = window.localStorage.getItem(settingsKey);
   if (!raw) {
-    return {
-      ...defaultSettings,
-      darkMode: window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
-    };
+    return defaultSettings;
   }
 
   try {
