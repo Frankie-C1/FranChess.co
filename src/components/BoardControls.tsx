@@ -1,15 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
-export function BoardControls({
-  current,
-  max,
-  onChange
-}: {
-  current: number;
-  max: number;
-  onChange: (next: number) => void;
-}) {
+export function BoardControls({ current, max, onChange }: { current: number; max: number; onChange: (next: number) => void }) {
   return (
     <div className="mt-3 grid grid-cols-4 gap-2">
       <ControlButton label="Zum Anfang" disabled={current <= 0} onClick={() => onChange(0)}>
@@ -28,21 +20,11 @@ export function BoardControls({
   );
 }
 
-function ControlButton({
-  label,
-  disabled,
-  onClick,
-  children
-}: {
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+function ControlButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
-      className="inline-flex h-11 items-center justify-center rounded-md bg-stone-100 text-stone-700 transition hover:bg-stone-200 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-stone-800 dark:text-stone-100 dark:hover:bg-stone-700"
+      className="inline-flex h-11 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-[var(--color-text)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       disabled={disabled}
       onClick={onClick}
       aria-label={label}

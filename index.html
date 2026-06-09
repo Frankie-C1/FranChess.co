@@ -27,8 +27,10 @@
           const stored = raw ? JSON.parse(raw) : null;
           const darkMode = stored?.darkMode ?? matchMedia("(prefers-color-scheme: dark)").matches;
           document.documentElement.classList.toggle("dark", Boolean(darkMode));
+          document.documentElement.dataset.theme = stored?.colorTheme || "standard";
         } catch {
           document.documentElement.classList.toggle("dark", matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = "standard";
         }
       })();
     </script>

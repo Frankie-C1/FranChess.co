@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { Cpu, HelpCircle, Lightbulb, ListPlus, RotateCcw, Search } from "lucide-react";
+import { Cpu, HelpCircle, Lightbulb, ListPlus, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
 import { BoardControls } from "../components/BoardControls";
 import { CapturedMaterialDisplay } from "../components/CapturedMaterialDisplay";
@@ -10,6 +10,7 @@ import { EvalGraph } from "../components/EvalGraph";
 import { EvaluationBar } from "../components/EvaluationBar";
 import { MoveJudgementBadge } from "../components/MoveJudgementBadge";
 import { MoveSuggestionPanel } from "../components/MoveSuggestionPanel";
+import { useKeyboardNavigation } from "../components/useKeyboardNavigation";
 import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
 import { analyzeGame } from "../lib/analysis/analyzeGame";
 import { judgeMove } from "../lib/analysis/moveJudgement";
@@ -45,7 +46,8 @@ export function ViewerPage({
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestionError, setSuggestionError] = useState("");
   const [boardVersion, setBoardVersion] = useState(0);
-  const board = useResponsiveBoardWidth();
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const board = useResponsiveBoardWidth(panelCollapsed ? 560 : 430);
 
   const maxPly = selectedGame?.moves.length ?? 0;
   const mainPosition = useMemo(() => buildPosition(selectedGame, activePly), [selectedGame, activePly]);
@@ -66,6 +68,8 @@ export function ViewerPage({
     [position, selectedSquare, settings.showLegalMoves]
   );
   const arrows = useMemo(() => candidatesToArrows(suggestions), [suggestions]);
+
+  useKeyboardNavigation({ enabled: true, current: activePly, max: maxPly, onChange: setPly });
 
   useEffect(() => {
     setSelectedSquare(null);
@@ -162,9 +166,15 @@ export function ViewerPage({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[440px_1fr]">
+    <div className={panelCollapsed ? "grid gap-6 xl:grid-cols-[minmax(460px,680px)_320px]" : "grid gap-6 xl:grid-cols-[440px_1fr]"}>
       <section className="grid gap-4">
         <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold">Partie</span>
+            <ActionButton className="hidden md:inline-flex" variant="quiet" onClick={() => setPanelCollapsed((value) => !value)} icon={<SlidersHorizontal size={16} />}>
+              {panelCollapsed ? "Panel anzeigen" : "Panel einklappen"}
+            </ActionButton>
+          </div>
           <select
             value={selectedGame.id}
             onChange={(event) => {
@@ -243,8 +253,19 @@ export function ViewerPage({
       </section>
 
       <section className="grid gap-4">
-        {selectedGame.analysis.length > 0 && <EvalGraph moves={selectedGame.analysis} activePly={activePly} onSelect={setPly} />}
-        <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+        {panelCollapsed ? (
+          <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+            <ActionButton className="w-full" variant="quiet" onClick={() => setPanelCollapsed(false)} icon={<SlidersHorizontal size={16} />}>
+              Panel anzeigen
+            </ActionButton>
+            <p className="mt-3 text-sm text-stone-500">
+              Zug {activePly}/{maxPly} · {formatEval(currentEval.cp, currentEval.mate)}
+            </p>
+          </div>
+        ) : (
+          selectedGame.analysis.length > 0 && <EvalGraph moves={selectedGame.analysis} activePly={activePly} onSelect={setPly} />
+        )}
+        {!panelCollapsed && <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold">
@@ -281,7 +302,7 @@ export function ViewerPage({
               );
             })}
           </div>
-        </div>
+        </div>}
 
         <MoveSuggestionPanel candidates={suggestions} isLoading={isSuggesting} error={suggestionError} />
 

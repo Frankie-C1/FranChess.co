@@ -1,8 +1,13 @@
 import type { ReactNode } from "react";
-import { Moon, Move, Search, Sparkles, Star } from "lucide-react";
-import type { AppSettings, EngineElo, StoredGame } from "../types";
+import { Moon, Move, Palette, Search, Sparkles, Star } from "lucide-react";
+import type { AppSettings, ColorTheme, EngineElo, StoredGame } from "../types";
 
 const engineEloOptions: EngineElo[] = [800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, "max"];
+const colorThemes: Array<{ id: ColorTheme; label: string; detail: string }> = [
+  { id: "standard", label: "Standard", detail: "Bestehendes FranChess-Farbschema." },
+  { id: "gold", label: "Schwarz/Gold", detail: "Dunkle Basis und goldene Akzente." },
+  { id: "purple", label: "Schwarz/Lila", detail: "Dunkle Basis und lila Akzente." }
+];
 
 export function SettingsPage({
   settings,
@@ -32,6 +37,31 @@ export function SettingsPage({
           checked={settings.darkMode}
           onChange={(checked) => update({ darkMode: checked })}
         />
+      </SettingsSection>
+
+      <SettingsSection icon={<Palette size={19} />} title="Farbtheme">
+        <div className="grid gap-2">
+          {colorThemes.map((theme) => (
+            <button
+              type="button"
+              key={theme.id}
+              onClick={() => update({ colorTheme: theme.id })}
+              className={`rounded-md border p-3 text-left transition ${
+                settings.colorTheme === theme.id
+                  ? "border-[var(--color-accent)] bg-[var(--color-surface-2)]"
+                  : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-2)]"
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <span className={`h-5 w-5 rounded-full ${theme.id === "gold" ? "bg-[#d6a934]" : theme.id === "purple" ? "bg-[#8b5cf6]" : "bg-[#5f8f45]"}`} />
+                <span>
+                  <span className="block text-sm font-medium">{theme.label}</span>
+                  <span className="block text-xs text-[var(--color-muted)]">{theme.detail}</span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
       </SettingsSection>
 
       <SettingsSection icon={<Move size={19} />} title="Brett">

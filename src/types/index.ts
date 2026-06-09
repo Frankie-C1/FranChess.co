@@ -4,6 +4,8 @@ export type AnalysisDepth = "quick" | "normal" | "deep";
 
 export type EngineElo = 800 | 1000 | 1200 | 1400 | 1600 | 1800 | 2000 | 2200 | "max";
 
+export type ColorTheme = "standard" | "gold" | "purple";
+
 export type GameResult = "1-0" | "0-1" | "1/2-1/2" | "*";
 
 export type ChessColor = "w" | "b";
@@ -40,6 +42,7 @@ export interface AppSettings {
   allowOpponentMoves: boolean;
   engineElo: EngineElo;
   coachSettingsCollapsed: boolean;
+  colorTheme: ColorTheme;
 }
 
 export interface GameMetadata {

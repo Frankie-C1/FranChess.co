@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, Brain, Download, Play, Settings, Upload } from "lucide-react";
+import { Activity, BarChart3, Brain, Download, Eye, Play, Settings, Upload } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
@@ -18,7 +18,7 @@ const nav = [
   { id: "home", label: "Start", icon: Activity },
   { id: "upload", label: "Upload", icon: Upload },
   { id: "dashboard", label: "Analyse", icon: BarChart3 },
-  { id: "viewer", label: "Viewer", icon: Brain },
+  { id: "viewer", label: "Viewer", icon: Eye },
   { id: "play", label: "Coach", icon: Play },
   { id: "training", label: "Training", icon: Brain },
   { id: "export", label: "Export", icon: Download },
@@ -26,7 +26,7 @@ const nav = [
 ] satisfies Array<{ id: CoachView; label: string; icon: LucideIcon }>;
 
 export default function App() {
-  const [view, setView] = useState<CoachView>("home");
+  const [view, setView] = useState<CoachView>(() => initialView());
   const [games, setGames] = useState<StoredGame[]>([]);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [settings, setSettings] = useState(loadSettings);
@@ -40,6 +40,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.darkMode);
+    document.documentElement.dataset.theme = settings.colorTheme;
     saveSettings(settings);
   }, [settings]);
 
@@ -56,20 +57,25 @@ export default function App() {
 
   function openGame(id: string) {
     setSelectedGameId(id);
-    setView("viewer");
+    navigate("viewer");
   }
 
   async function toggleFavorite(id: string) {
     await updateGames(games.map((game) => (game.id === id ? { ...game, favorite: !game.favorite } : game)));
   }
 
+  function navigate(nextView: CoachView) {
+    setView(nextView);
+    window.localStorage.setItem("franchess.lastView.v1", nextView);
+  }
+
   return (
     <Layout
       nav={nav}
       view={view}
-      onNavigate={setView}
+      onNavigate={navigate}
     >
-      {view === "home" && <HomePage onNavigate={setView} gameCount={games.length} />}
+      {view === "home" && <HomePage onNavigate={navigate} games={games} />}
       {view === "upload" && <UploadPage games={games} onGamesChange={updateGames} onOpenGame={openGame} onToggleFavorite={toggleFavorite} />}
       {view === "dashboard" && <DashboardPage games={games} onNavigate={setView} />}
       {view === "viewer" && (
@@ -78,16 +84,23 @@ export default function App() {
           selectedGame={selectedGame}
           onSelectGame={setSelectedGameId}
           onGamesChange={updateGames}
-          onUpload={() => setView("upload")}
+          onUpload={() => navigate("upload")}
           settings={settings}
         />
       )}
       {view === "play" && <PlayPage settings={settings} onSettingsChange={setSettings} games={games} />}
       {view === "training" && (
-        <TrainingPage games={games} onUpload={() => setView("upload")} onSelectGame={(id) => { setSelectedGameId(id); setView("viewer"); }} />
+        <TrainingPage games={games} onUpload={() => navigate("upload")} onSelectGame={(id) => { setSelectedGameId(id); navigate("viewer"); }} />
       )}
-      {view === "export" && <ExportPage games={games} onUpload={() => setView("upload")} />}
+      {view === "export" && <ExportPage games={games} onUpload={() => navigate("upload")} />}
       {view === "settings" && <SettingsPage settings={settings} onSettingsChange={setSettings} games={games} onOpenGame={openGame} onToggleFavorite={toggleFavorite} />}
     </Layout>
   );
+}
+
+function initialView(): CoachView {
+  if (typeof window === "undefined") return "home";
+  const saved = window.localStorage.getItem("franchess.lastView.v1") as CoachView | null;
+  if (saved) return saved;
+  return window.matchMedia?.("(max-width: 767px)").matches ? "play" : "home";
 }

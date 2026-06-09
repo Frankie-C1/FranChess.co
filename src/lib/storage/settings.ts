@@ -7,7 +7,8 @@ export const defaultSettings: AppSettings = {
   showLegalMoves: true,
   allowOpponentMoves: false,
   engineElo: 1200,
-  coachSettingsCollapsed: false
+  coachSettingsCollapsed: false,
+  colorTheme: "standard"
 };
 
 export function loadSettings(): AppSettings {

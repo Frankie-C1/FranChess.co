@@ -10,19 +10,70 @@
 
 :root {
   color-scheme: light;
+  --color-bg: #f4f1ea;
+  --color-surface: #ffffff;
+  --color-surface-2: #ede8dc;
+  --color-text: #1c1917;
+  --color-muted: #6b6259;
+  --color-border: #e7dfd2;
+  --color-accent: #5f8f45;
+  --color-accent-2: #4f7939;
+  --color-accent-contrast: #ffffff;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f4f1ea;
-  color: #1f2933;
+  background: var(--color-bg);
+  color: var(--color-text);
   -webkit-text-size-adjust: 100%;
 }
 
 html {
   min-height: 100%;
+  background: var(--color-bg);
 }
 
 .dark {
   color-scheme: dark;
+  --color-bg: #0c0a09;
+  --color-surface: #1c1917;
+  --color-surface-2: #292524;
+  --color-text: #f5f5f4;
+  --color-muted: #a8a29e;
+  --color-border: #44403c;
+  --color-accent: #d6a934;
+  --color-accent-2: #9f7a18;
+  --color-accent-contrast: #1c1503;
+}
+
+:root[data-theme="gold"] {
+  --color-accent: #b88700;
+  --color-accent-2: #8f6a12;
+  --color-accent-contrast: #ffffff;
+}
+
+:root.dark[data-theme="gold"] {
+  --color-bg: #080706;
+  --color-surface: #16130d;
+  --color-surface-2: #241f14;
+  --color-border: #4c4228;
+  --color-accent: #d6a934;
+  --color-accent-2: #b88700;
+  --color-accent-contrast: #1f1600;
+}
+
+:root[data-theme="purple"] {
+  --color-accent: #7c3aed;
+  --color-accent-2: #6d28d9;
+  --color-accent-contrast: #ffffff;
+}
+
+:root.dark[data-theme="purple"] {
+  --color-bg: #08070d;
+  --color-surface: #171421;
+  --color-surface-2: #221c33;
+  --color-border: #453a64;
+  --color-accent: #a78bfa;
+  --color-accent-2: #8b5cf6;
+  --color-accent-contrast: #160c2f;
 }
 
 body {
@@ -32,6 +83,7 @@ body {
   min-height: 100svh;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   -webkit-tap-highlight-color: transparent;
+  background: var(--color-bg);
 }
 
 html,
@@ -45,6 +97,7 @@ body,
 
 #root {
   min-height: 100svh;
+  background: var(--color-bg);
 }
 
 main,

@@ -7,18 +7,17 @@ export function CapturedMaterialDisplay({ fen, orientation }: { fen: string; ori
 
   return (
     <div className="grid gap-2 text-sm">
-      <MaterialRow label={orientation === "white" ? "Schwarz" : "Weiß"} pieces={top.captured} advantage={top.advantage} />
-      <MaterialRow label={orientation === "white" ? "Weiß" : "Schwarz"} pieces={bottom.captured} advantage={bottom.advantage} />
+      <MaterialRow pieces={top.captured} advantage={top.advantage} align="start" />
+      <MaterialRow pieces={bottom.captured} advantage={bottom.advantage} align="end" />
     </div>
   );
 }
 
-function MaterialRow({ label, pieces, advantage }: { label: string; pieces: string[]; advantage: number }) {
+function MaterialRow({ pieces, advantage, align }: { pieces: string[]; advantage: number; align: "start" | "end" }) {
   return (
-    <div className="flex min-h-7 items-center justify-between gap-2 rounded-md bg-stone-100 px-2 py-1 dark:bg-stone-800">
-      <span className="text-xs font-medium text-stone-500 dark:text-stone-400">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-lg leading-none text-stone-400 dark:text-stone-500">{pieces.join(" ") || "·"}</span>
-      <span className="text-xs font-semibold text-stone-600 dark:text-stone-300">{advantage > 0 ? `+${advantage}` : ""}</span>
+    <div className={`flex min-h-7 items-center gap-2 rounded-md bg-[var(--color-surface-2)] px-2 py-1 ${align === "end" ? "justify-end" : "justify-start"}`}>
+      <span className="min-w-0 truncate text-lg leading-none text-stone-400 dark:text-stone-500">{pieces.join(" ") || "·"}</span>
+      <span className="text-xs font-semibold text-[var(--color-muted)]">{advantage > 0 ? `+${advantage}` : ""}</span>
     </div>
   );
 }

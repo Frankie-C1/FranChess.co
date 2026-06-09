@@ -7,10 +7,10 @@ interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function ActionButton({ icon, variant = "primary", className = "", children, ...props }: ActionButtonProps) {
   const styles = {
-    primary: "bg-[#5f8f45] text-white hover:bg-[#4f7939]",
-    secondary: "bg-stone-900 text-white hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-white",
+    primary: "bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:bg-[var(--color-accent-2)]",
+    secondary: "bg-[var(--color-text)] text-[var(--color-bg)] hover:opacity-90",
     quiet:
-      "border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800"
+      "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-surface-2)]"
   };
 
   return (

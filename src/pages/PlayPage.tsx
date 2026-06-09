@@ -8,6 +8,7 @@ import { CapturedMaterialDisplay } from "../components/CapturedMaterialDisplay";
 import { EvaluationBar } from "../components/EvaluationBar";
 import { MoveJudgementBadge } from "../components/MoveJudgementBadge";
 import { MoveSuggestionPanel } from "../components/MoveSuggestionPanel";
+import { useKeyboardNavigation } from "../components/useKeyboardNavigation";
 import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
 import { buildCoachProfile } from "../lib/analysis/profile";
 import { judgeMove, neutralJudgement } from "../lib/analysis/moveJudgement";
@@ -50,7 +51,9 @@ export function PlayPage({
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestionError, setSuggestionError] = useState("");
   const [boardVersion, setBoardVersion] = useState(0);
-  const board = useResponsiveBoardWidth(settings.coachSettingsCollapsed ? 520 : 430);
+  const [lastUserEntry, setLastUserEntry] = useState<CoachHistoryEntry | null>(null);
+  const [lastCoachReply, setLastCoachReply] = useState<CoachHistoryEntry | null>(null);
+  const board = useResponsiveBoardWidth(settings.coachSettingsCollapsed ? 560 : 430);
   const profile = useMemo(() => buildCoachProfile(games), [games]);
   const current = history[currentPly] ?? history[history.length - 1];
   const position = current.fen;
@@ -64,22 +67,18 @@ export function PlayPage({
   );
   const arrows = useMemo(() => candidatesToArrows(suggestions), [suggestions]);
 
+  useKeyboardNavigation({ enabled: true, current: currentPly, max: history.length - 1, onChange: setCurrentPly });
+
   function updateSettings(next: Partial<AppSettings>) {
     onSettingsChange({ ...settings, ...next });
   }
 
   function canUserMoveFrom(square: Square) {
-    return atLatest && !isThinking && !game.isGameOver() && game.turn() === playerColor && canSelectPiece(position, square, false, playerColor);
+    return !isThinking && !game.isGameOver() && game.turn() === playerColor && canSelectPiece(position, square, false, playerColor);
   }
 
   function onDrop(sourceSquare: Square, targetSquare: Square) {
-    if (!atLatest) {
-      setCoachNote("Du bist nicht am letzten Zug. Springe ganz vor, bevor du weiterspielst.");
-      setBoardVersion((value) => value + 1);
-      return false;
-    }
     if (!canUserMoveFrom(sourceSquare)) return false;
-
     const move = tryMove(position, sourceSquare, targetSquare);
     setSelectedSquare(null);
     setSuggestions([]);
@@ -87,8 +86,7 @@ export function PlayPage({
       setBoardVersion((value) => value + 1);
       return false;
     }
-
-    void reviewUserMove(position, move.fen, move.san, move.uci);
+    void reviewUserMove(position, move.fen, move.san, move.uci, currentPly);
     return true;
   }
 
@@ -107,9 +105,10 @@ export function PlayPage({
     setSelectedSquare(canUserMoveFrom(square) ? square : null);
   }
 
-  async function reviewUserMove(beforeFen: string, afterFen: string, san: string, uci: string) {
+  async function reviewUserMove(beforeFen: string, afterFen: string, san: string, uci: string, branchFromPly: number) {
     setIsThinking(true);
     setSuggestionError("");
+    setLastCoachReply(null);
     try {
       const before = await stockfishService.getTopMoves(beforeFen, settings.engineElo, "quick", 5);
       const after = await stockfishService.evaluateFen(afterFen, "quick", settings.engineElo);
@@ -122,6 +121,7 @@ export function PlayPage({
         candidates: before.candidateMoves
       });
       const pattern = profile.topCategories[0]?.category ? ` Muster aus deinen Partien: ${humanCategory(profile.topCategories[0].category)}.` : "";
+      const variantPrefix = branchFromPly < history.length - 1 ? "Neue Variante gestartet. " : "";
       const userEntry: CoachHistoryEntry = {
         fen: afterFen,
         san,
@@ -130,12 +130,15 @@ export function PlayPage({
         cp: after.cp,
         mate: after.mate,
         judgement,
-        note: `${judgement.symbol} ${judgement.text} – ${judgement.comment}${pattern}`
+        note: `${variantPrefix}${judgement.symbol} ${judgement.text} - ${judgement.comment}${pattern}`
       };
-      appendHistory(userEntry);
-      setCoachNote(`${judgement.symbol} ${judgement.text} – ${Math.round(loss)} cp Verlust. ${formatEval(after.cp, after.mate)}`);
+      const userPly = branchFromPly + 1;
+      setHistory((currentHistory) => currentHistory.slice(0, branchFromPly + 1).concat(userEntry));
+      setCurrentPly(userPly);
+      setLastUserEntry(userEntry);
+      setCoachNote(`Dein letzter Zug: ${judgement.symbol} ${judgement.text} - ${Math.round(loss)} cp Verlust. ${formatEval(after.cp, after.mate)}`);
       setDetailNote(userEntry.note ?? neutralJudgement(after.cp, after.mate));
-      await playCoachMove(afterFen, [userEntry]);
+      await playCoachMove(afterFen, userPly);
     } catch (error) {
       const message = error instanceof Error ? error.message : engineUnavailableMessage;
       setCoachNote(message);
@@ -145,7 +148,7 @@ export function PlayPage({
     }
   }
 
-  async function playCoachMove(fen: string, stagedEntries: CoachHistoryEntry[] = []) {
+  async function playCoachMove(fen: string, appendAfterPly: number) {
     const chess = new Chess(fen);
     if (chess.isGameOver()) {
       setCoachNote("Partie beendet.");
@@ -161,6 +164,7 @@ export function PlayPage({
         setIsThinking(false);
         return;
       }
+      await waitForCoachDelay();
       const move = chess.move({ from: moveUci.slice(0, 2), to: moveUci.slice(2, 4), promotion: moveUci[4] || "q" });
       if (!move) {
         setCoachNote(`Stockfish lieferte einen illegalen Zug: ${moveUci}`);
@@ -176,10 +180,15 @@ export function PlayPage({
         cp: evaluation.cp,
         mate: evaluation.mate,
         judgement: null,
-        note: `Coach spielte ${move.san}. ${neutralJudgement(evaluation.cp, evaluation.mate)}`
+        note: `Coach antwortete: ${move.san}. ${neutralJudgement(evaluation.cp, evaluation.mate)}`
       };
-      appendHistory(coachEntry, stagedEntries);
-      setDetailNote(coachEntry.note ?? "");
+      setHistory((currentHistory) => {
+        const next = currentHistory.slice(0, appendAfterPly + 1).concat(coachEntry);
+        window.setTimeout(() => setCurrentPly(next.length - 1), 0);
+        return next;
+      });
+      setLastCoachReply(coachEntry);
+      setDetailNote(lastUserEntry?.note ?? coachEntry.note ?? "");
     } catch (error) {
       const message = error instanceof Error ? error.message : engineUnavailableMessage;
       setCoachNote(message);
@@ -189,17 +198,6 @@ export function PlayPage({
     }
   }
 
-  function appendHistory(entry: CoachHistoryEntry, stagedEntries: CoachHistoryEntry[] = []) {
-    setHistory((currentHistory) => {
-      const base = currentHistory.slice(0, currentPly + 1);
-      const staged = stagedEntries.length > 0 ? stagedEntries : [];
-      const stagedIds = new Set(staged.map((item) => item.fen));
-      const next = [...base, ...staged.filter((item) => !stagedIds.has(base[base.length - 1]?.fen)), entry];
-      window.setTimeout(() => setCurrentPly(next.length - 1), 0);
-      return next;
-    });
-  }
-
   function reset(nextColor: "w" | "b" = playerColor) {
     setHistory([{ fen: startFen, cp: null, mate: null, judgement: null }]);
     setCurrentPly(0);
@@ -207,11 +205,13 @@ export function PlayPage({
     setSelectedSquare(null);
     setSuggestions([]);
     setSuggestionError("");
+    setLastUserEntry(null);
+    setLastCoachReply(null);
     setCoachNote(nextColor === "w" ? "Neue Partie. Spiele mit Weiß." : "Neue Partie. Du spielst Schwarz; Stockfish beginnt.");
     setDetailNote("Wähle eine Engine-Elo. Maximal deaktiviert UCI_LimitStrength.");
     if (nextColor === "b") {
       setIsThinking(true);
-      void playCoachMove(startFen);
+      void playCoachMove(startFen, 0);
     }
   }
 
@@ -234,12 +234,13 @@ export function PlayPage({
   }
 
   return (
-    <div className={settings.coachSettingsCollapsed ? "grid gap-6 xl:grid-cols-[minmax(440px,640px)_1fr]" : "grid gap-6 lg:grid-cols-[440px_1fr]"}>
+    <div className={settings.coachSettingsCollapsed ? "grid gap-6 xl:grid-cols-[minmax(480px,700px)_minmax(280px,1fr)]" : "grid gap-6 lg:grid-cols-[440px_1fr]"}>
       <section className="grid gap-3">
-        <div className="rounded-md border border-stone-200 bg-white p-3 text-sm font-medium text-stone-800 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100">
-          {isThinking ? "Stockfish denkt..." : coachNote}
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm font-medium text-[var(--color-text)]">
+          {isThinking ? "Coach denkt ..." : coachNote}
+          {!atLatest && <p className="mt-1 text-xs text-[var(--color-muted)]">Du bist in einer früheren Stellung. Ein neuer Zug startet ab hier eine neue Linie.</p>}
         </div>
-        <div ref={board.ref} className="rounded-md border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+        <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
           <CapturedMaterialDisplay fen={position} orientation={orientation} />
           <div className="mt-3 grid gap-3 sm:grid-cols-[36px_1fr]">
             <EvaluationBar cp={current.cp} mate={current.mate} />
@@ -268,8 +269,8 @@ export function PlayPage({
         <MoveSuggestionPanel candidates={suggestions} isLoading={isSuggesting} error={suggestionError} />
       </section>
 
-      <section className="grid gap-4">
-        <div className="rounded-md border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+      <section className={settings.coachSettingsCollapsed ? "grid content-start gap-4 xl:pt-20" : "grid gap-4"}>
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-2xl font-semibold">Gegen Coach spielen</h1>
             <ActionButton
@@ -299,7 +300,7 @@ export function PlayPage({
                 <select
                   value={settings.engineElo}
                   onChange={(event) => updateSettings({ engineElo: event.target.value === "max" ? "max" : Number(event.target.value) as AppSettings["engineElo"] })}
-                  className="h-11 rounded-md border border-stone-300 bg-white px-3 dark:border-stone-700 dark:bg-stone-950"
+                  className="h-11 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3"
                 >
                   {engineEloOptions.map((elo) => (
                     <option key={elo} value={elo}>
@@ -308,15 +309,26 @@ export function PlayPage({
                   ))}
                 </select>
               </label>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-[var(--color-muted)]">
                 UCI_Elo: {engineStatus.supportsElo ? "unterstützt" : "nicht bestätigt"} · LimitStrength: {engineStatus.supportsLimitStrength ? "unterstützt" : "nicht bestätigt"}
               </p>
             </div>
           )}
 
-          <MoveJudgementBadge judgement={current.judgement} />
-          <div className="mt-4 rounded-md bg-stone-100 p-4 text-sm leading-6 text-stone-700 dark:bg-stone-800 dark:text-stone-200">{detailNote}</div>
-          <p className="mt-3 text-xs text-stone-500">
+          <div className="mt-4 grid gap-3">
+            {lastUserEntry?.judgement && (
+              <div>
+                <p className="mb-2 text-sm font-semibold">Dein letzter Zug</p>
+                <MoveJudgementBadge judgement={lastUserEntry.judgement} />
+              </div>
+            )}
+            {lastCoachReply && (
+              <p className="rounded-md bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-muted)]">{lastCoachReply.note}</p>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-md bg-[var(--color-surface-2)] p-4 text-sm leading-6 text-[var(--color-text)]">{detailNote}</div>
+          <p className="mt-3 text-xs text-[var(--color-muted)]">
             Engine: {engineStatus.label} · Bewertung: {formatEval(current.cp, current.mate)}
           </p>
 
@@ -361,6 +373,11 @@ function humanCategory(category: string): string {
 
 function sideButton(active: boolean): string {
   return `h-11 rounded-md text-sm font-medium ${
-    active ? "bg-[#5f8f45] text-white" : "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200"
+    active ? "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]" : "bg-[var(--color-surface-2)] text-[var(--color-text)]"
   }`;
+}
+
+function waitForCoachDelay(): Promise<void> {
+  const delay = 350 + Math.round(Math.random() * 350);
+  return new Promise((resolve) => window.setTimeout(resolve, delay));
 }
