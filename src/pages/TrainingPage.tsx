@@ -20,6 +20,12 @@ interface LichessPuzzle {
   openingTags?: string[];
 }
 
+interface PuzzleHistoryEntry {
+  puzzleId: string;
+  playedAt: string;
+  solved: boolean;
+}
+
 interface OpeningNode {
   id: string;
   san: string;
@@ -47,6 +53,7 @@ interface OpeningProgress {
 }
 
 const puzzleThemes = ["fork", "pin", "mate", "hangingPiece", "endgame", "advantage", "crushing", "discoveredAttack", "opening"];
+const puzzleHistoryKey = "franchess.puzzleHistory.v1";
 const openingStorageKey = "franchess.openingLines.v2";
 const openingProgressKey = "franchess.openingProgress.v1";
 const bundledOpeningsIndex = "/data/openings/index.json";
@@ -139,7 +146,9 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   const [loadState, setLoadState] = useState<"loading" | "ready" | "missing" | "empty" | "error">("loading");
   const [rating, setRating] = useState("all");
   const [theme, setTheme] = useState("all");
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activePuzzleId, setActivePuzzleId] = useState<string | null>(null);
+  const [sessionPuzzleIds, setSessionPuzzleIds] = useState<string[]>([]);
+  const [history, setHistory] = useState<PuzzleHistoryEntry[]>(() => loadPuzzleHistory());
   const [game, setGame] = useState(() => new Chess());
   const [solutionIndex, setSolutionIndex] = useState(0);
   const [message, setMessage] = useState("Wähle ein Puzzle.");
@@ -189,7 +198,17 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
     });
   }, [puzzles, rating, theme]);
 
-  const activePuzzle = filtered[activeIndex] ?? filtered[0] ?? null;
+  const playedIds = useMemo(() => new Set(history.map((entry) => entry.puzzleId)), [history]);
+  const solvedCount = useMemo(() => history.filter((entry) => entry.solved).length, [history]);
+  const availablePuzzles = useMemo(() => {
+    const sessionIds = new Set(sessionPuzzleIds);
+    return filtered.filter((puzzle) => {
+      if (sessionIds.has(puzzle.puzzleId)) return false;
+      return settings.allowPlayedPuzzles || !playedIds.has(puzzle.puzzleId);
+    });
+  }, [filtered, playedIds, sessionPuzzleIds, settings.allowPlayedPuzzles]);
+  const activePuzzle = filtered.find((puzzle) => puzzle.puzzleId === activePuzzleId) ?? null;
+  const allFilteredPlayed = filtered.length > 0 && availablePuzzles.length === 0 && !activePuzzle;
 
   useEffect(() => {
     if (!activePuzzle) return;
@@ -197,8 +216,29 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   }, [activePuzzle?.puzzleId]);
 
   useEffect(() => {
-    setActiveIndex(0);
-  }, [rating, theme]);
+    setActivePuzzleId(null);
+    setSelectedSquare(null);
+    setShowSolution(false);
+    setSolvedOverlay(false);
+  }, [rating, theme, settings.allowPlayedPuzzles]);
+
+  useEffect(() => {
+    if (loadState !== "ready" || activePuzzle || availablePuzzles.length === 0) return;
+    selectRandomPuzzle();
+  }, [activePuzzle, availablePuzzles, loadState]);
+
+  function selectRandomPuzzle() {
+    if (availablePuzzles.length === 0) {
+      setActivePuzzleId(null);
+      setMessage("Alle verfügbaren Puzzles wurden bereits gespielt.");
+      return;
+    }
+    const lastId = sessionPuzzleIds[sessionPuzzleIds.length - 1];
+    const candidates = availablePuzzles.length > 1 ? availablePuzzles.filter((puzzle) => puzzle.puzzleId !== lastId) : availablePuzzles;
+    const next = candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
+    setActivePuzzleId(next.puzzleId);
+    setSessionPuzzleIds((ids) => (ids.includes(next.puzzleId) ? ids : [...ids, next.puzzleId]));
+  }
 
   function startPuzzle(puzzle: LichessPuzzle) {
     try {
@@ -216,10 +256,39 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
       setSelectedSquare(null);
       setBoardVersion((value) => value + 1);
       setMessage("Finde den nächsten Zug der Lösung.");
+      recordPuzzlePlayed(puzzle.puzzleId, false);
     } catch {
       setStatus("wrong");
       setMessage("Puzzle-FEN oder Startzug ist ungültig.");
     }
+  }
+
+  function recordPuzzlePlayed(puzzleId: string, solved: boolean) {
+    setHistory((entries) => {
+      const withoutCurrent = entries.filter((entry) => entry.puzzleId !== puzzleId);
+      const existing = entries.find((entry) => entry.puzzleId === puzzleId);
+      const next = [
+        ...withoutCurrent,
+        {
+          puzzleId,
+          playedAt: new Date().toISOString(),
+          solved: solved || Boolean(existing?.solved)
+        }
+      ];
+      savePuzzleHistory(next);
+      return next;
+    });
+  }
+
+  function resetPuzzleHistory() {
+    savePuzzleHistory([]);
+    setHistory([]);
+    setSessionPuzzleIds([]);
+    setActivePuzzleId(null);
+    setStatus("idle");
+    setShowSolution(false);
+    setSolvedOverlay(false);
+    setMessage("Puzzle-Verlauf zurückgesetzt.");
   }
 
   function onPuzzleDrop(from: Square, to: Square) {
@@ -268,14 +337,11 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
     setStatus(solved ? "solved" : "correct");
     setMessage(solved ? "Gelöst." : "Richtig. Nächster Zug.");
     if (solved) {
+      recordPuzzlePlayed(activePuzzle.puzzleId, true);
       setSolvedOverlay(true);
       window.setTimeout(() => {
         setSolvedOverlay(false);
-        if (filtered.length <= 1) {
-          setMessage("Keine weiteren Puzzles.");
-          return;
-        }
-        setActiveIndex((value) => (value + 1) % filtered.length);
+        setActivePuzzleId(null);
       }, 1500);
     }
     return true;
@@ -362,10 +428,26 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
               </select>
             </label>
           </div>
+          <div className="mt-4 grid gap-2 rounded-md bg-[var(--color-surface-2)] p-3 text-xs text-[var(--color-muted)] sm:grid-cols-4">
+            <span>Gespielt: {history.length}</span>
+            <span>Gelöst: {solvedCount}</span>
+            <span>Quote: {history.length ? Math.round((solvedCount / history.length) * 100) : 0}%</span>
+            <span>Ungespielt: {availablePuzzles.length}</span>
+          </div>
+          {allFilteredPlayed && (
+            <p className="mt-3 rounded-md bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-muted)]">
+              Alle verfügbaren Puzzles wurden bereits gespielt.
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             <ActionButton variant="quiet" onClick={() => activePuzzle && startPuzzle(activePuzzle)}>Neu starten</ActionButton>
             <ActionButton variant="quiet" onClick={revealSolution}>Lösung anzeigen</ActionButton>
-            <ActionButton onClick={() => setActiveIndex((value) => (filtered.length ? (value + 1) % filtered.length : 0))}>Nächstes Puzzle</ActionButton>
+            <ActionButton onClick={() => {
+              setActivePuzzleId(null);
+              setShowSolution(false);
+              setSolvedOverlay(false);
+            }}>Nächstes Puzzle</ActionButton>
+            {allFilteredPlayed && <ActionButton variant="quiet" onClick={resetPuzzleHistory}>Puzzle-Verlauf zurücksetzen</ActionButton>}
           </div>
           {showSolution && activePuzzle && <p className="mt-3 rounded-md bg-[var(--color-surface-2)] p-3 text-sm">{activePuzzle.moves.slice(1).join(" ")}</p>}
           {activePuzzle && (
@@ -744,6 +826,21 @@ function PuzzleImportGuide() {
       <pre className="mt-4 overflow-x-auto rounded-md bg-[var(--color-surface-2)] p-3 text-xs">node scripts/import-lichess-puzzles.mjs path/to/lichess_db_puzzle.csv public/data/puzzles.json 1000</pre>
     </section>
   );
+}
+
+function loadPuzzleHistory(): PuzzleHistoryEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(puzzleHistoryKey) ?? "[]") as PuzzleHistoryEntry[];
+    return parsed.filter((entry) => entry.puzzleId && entry.playedAt);
+  } catch {
+    return [];
+  }
+}
+
+function savePuzzleHistory(entries: PuzzleHistoryEntry[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(puzzleHistoryKey, JSON.stringify(entries));
 }
 
 function buildTasks(games: StoredGame[]): TrainingTask[] {

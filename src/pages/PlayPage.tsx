@@ -244,10 +244,10 @@ export function PlayPage({
           {isThinking ? "Coach denkt ..." : coachNote}
           {!atLatest && <p className="mt-1 text-xs text-[var(--color-muted)]">Du bist in einer früheren Stellung. Ein neuer Zug startet ab hier eine neue Linie.</p>}
         </div>
-        <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 md:grid-cols-[36px_minmax(0,1fr)_48px]">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <div className="grid grid-cols-[32px_minmax(0,1fr)] items-stretch gap-3 overflow-hidden md:grid-cols-[36px_minmax(0,1fr)_48px]">
             <EvaluationBar cp={current.cp} mate={current.mate} />
-            <div className="board-touch-area flex justify-center overflow-hidden">
+            <div ref={board.ref} className="board-touch-area flex aspect-square w-full max-w-full justify-center justify-self-center overflow-hidden">
               <Chessboard
                 key={`coach-${boardVersion}`}
                 id="franchess-play"

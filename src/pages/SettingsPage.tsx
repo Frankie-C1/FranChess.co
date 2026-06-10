@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Columns3, Database, Moon, Move, Palette, Search, Sparkles, Star, Trash2 } from "lucide-react";
+import { Columns3, Database, Moon, Move, Palette, Puzzle, Search, Sparkles, Star, Trash2 } from "lucide-react";
 import { filterGamesByPlayer, sortGamesByDate, type GameSortOrder } from "../lib/chess/gameList";
 import type { AppSettings, BoardTheme, ColorTheme, EngineElo, LayoutMode, StoredGame } from "../types";
 
@@ -149,6 +149,15 @@ export function SettingsPage({
         <p className="text-sm leading-6 text-[var(--color-muted)]">
           Zugvorschläge laufen nur auf Buttondruck. Vor- und Zurücknavigation nutzt gespeicherte Analysewerte und startet keine neue Engineberechnung.
         </p>
+      </SettingsSection>
+
+      <SettingsSection icon={<Puzzle size={19} />} title="Training">
+        <ToggleRow
+          label="Bereits gespielte Puzzles erneut anzeigen"
+          description="Wenn aus, werden lokal gemerkte Puzzles standardmäßig übersprungen."
+          checked={settings.allowPlayedPuzzles}
+          onChange={(checked) => update({ allowPlayedPuzzles: checked })}
+        />
       </SettingsSection>
 
       <SettingsSection icon={<Database size={19} />} title="Daten verwalten">

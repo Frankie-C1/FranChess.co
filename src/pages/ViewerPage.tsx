@@ -226,10 +226,10 @@ export function ViewerPage({
           </select>
         </div>
 
-        <div ref={board.ref} className="rounded-md border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-          <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 md:grid-cols-[36px_minmax(0,1fr)_48px]">
+        <div className="rounded-md border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+          <div className="grid grid-cols-[32px_minmax(0,1fr)] items-stretch gap-3 overflow-hidden md:grid-cols-[36px_minmax(0,1fr)_48px]">
             <EvaluationBar cp={currentEval.cp} mate={currentEval.mate} />
-            <div className="board-touch-area flex justify-center overflow-hidden">
+            <div ref={board.ref} className="board-touch-area flex aspect-square w-full max-w-full justify-center justify-self-center overflow-hidden">
               <Chessboard
                 key={`viewer-${boardVersion}`}
                 id="franchess-viewer"

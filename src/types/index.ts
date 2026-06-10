@@ -51,6 +51,7 @@ export type MistakeCategory =
 export interface AppSettings {
   darkMode: boolean;
   showLegalMoves: boolean;
+  allowPlayedPuzzles: boolean;
   allowOpponentMoves: boolean;
   engineElo: EngineElo;
   coachSettingsCollapsed: boolean;

@@ -5,6 +5,7 @@ export const settingsKey = "franchess.settings.v1";
 export const defaultSettings: AppSettings = {
   darkMode: true,
   showLegalMoves: true,
+  allowPlayedPuzzles: false,
   allowOpponentMoves: false,
   engineElo: 1200,
   coachSettingsCollapsed: false,
