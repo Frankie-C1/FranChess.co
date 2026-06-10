@@ -238,15 +238,14 @@ export function PlayPage({
   }
 
   return (
-    <div className={settings.coachSettingsCollapsed ? "grid gap-5 xl:grid-cols-[minmax(460px,620px)_minmax(300px,1fr)]" : "grid gap-5 lg:grid-cols-[420px_1fr]"}>
+    <div className="grid gap-4 xl:grid-cols-[minmax(430px,570px)_minmax(300px,1fr)]">
       <section className="grid gap-3">
-        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm font-medium text-[var(--color-text)]">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm font-medium text-[var(--color-text)] md:hidden">
           {isThinking ? "Coach denkt ..." : coachNote}
           {!atLatest && <p className="mt-1 text-xs text-[var(--color-muted)]">Du bist in einer früheren Stellung. Ein neuer Zug startet ab hier eine neue Linie.</p>}
         </div>
         <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <CapturedMaterialDisplay fen={position} orientation={orientation} />
-          <div className="mt-3 grid gap-3 sm:grid-cols-[36px_1fr]">
+          <div className="grid grid-cols-[30px_minmax(0,1fr)_48px] gap-3 sm:grid-cols-[36px_minmax(0,1fr)_64px]">
             <EvaluationBar cp={current.cp} mate={current.mate} />
             <div className="flex justify-center overflow-hidden">
               <Chessboard
@@ -267,8 +266,11 @@ export function PlayPage({
                 customLightSquareStyle={{ backgroundColor: boardColors.light }}
               />
             </div>
+            <CapturedMaterialDisplay fen={position} orientation={orientation} layout="side" />
           </div>
-          <BoardControls current={currentPly} max={history.length - 1} onChange={setCurrentPly} />
+          <div className="md:hidden">
+            <BoardControls current={currentPly} max={history.length - 1} onChange={setCurrentPly} />
+          </div>
         </div>
       </section>
 
@@ -283,6 +285,13 @@ export function PlayPage({
             >
               {settings.coachSettingsCollapsed ? "Einstellungen anzeigen" : "Einstellungen einklappen"}
             </ActionButton>
+          </div>
+          <div className="mt-4 rounded-md bg-[var(--color-surface-2)] p-3 text-sm font-medium text-[var(--color-text)]">
+            {isThinking ? "Coach denkt ..." : coachNote}
+            {!atLatest && <p className="mt-1 text-xs text-[var(--color-muted)]">Du bist in einer früheren Stellung. Ein neuer Zug startet ab hier eine neue Linie.</p>}
+          </div>
+          <div className="hidden md:block">
+            <BoardControls current={currentPly} max={history.length - 1} onChange={setCurrentPly} />
           </div>
 
           {!hasStarted && (

@@ -20,7 +20,7 @@ export function Layout({ nav, view, onNavigate, layoutMode, utility, children }:
   const bottomVisibility = forceBottom ? "" : "md:hidden";
   const bottomHidden = forceTop ? "hidden" : bottomVisibility;
   const topGridVisibility = forceBottom ? "hidden" : forceTop ? "grid" : "hidden md:grid lg:hidden";
-  const mainPadding = forceTop ? "pb-6" : forceBottom ? "pb-28" : "pb-28 md:pb-6";
+  const mainPadding = forceTop ? "pb-6" : forceBottom ? "pb-32" : "pb-32 md:pb-6";
 
   function navigate(nextView: CoachView) {
     onNavigate(nextView);
@@ -90,7 +90,7 @@ export function Layout({ nav, view, onNavigate, layoutMode, utility, children }:
       {menuOpen && (
         <button
           type="button"
-          aria-label="Menue schliessen"
+          aria-label="Menü schließen"
           className={`fixed inset-0 z-30 bg-stone-950/20 backdrop-blur-[1px] ${bottomVisibility}`}
           onClick={() => setMenuOpen(false)}
         />
@@ -119,10 +119,10 @@ export function Layout({ nav, view, onNavigate, layoutMode, utility, children }:
         </div>
       </div>
 
-      <nav className={`fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-surface)]/98 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 shadow-[0_-8px_28px_rgba(0,0,0,0.12)] backdrop-blur ${bottomHidden}`}>
+      <nav className={`fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+10px)] z-50 rounded-[26px] border border-[var(--color-border)] bg-[var(--color-surface)]/98 px-3 pb-2 pt-2 shadow-[0_12px_32px_rgba(0,0,0,0.20)] backdrop-blur ${bottomHidden}`}>
         <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
           <MobileNavButton nav={nav} id="viewer" view={view} onNavigate={navigate} />
-          <MobileNavButton nav={nav} id="dashboard" view={view} onNavigate={navigate} label="Analyse" />
+          <MobileNavButton nav={nav} id="dashboard" view={view} onNavigate={navigate} label="Übersicht" />
           <button
             type="button"
             onClick={() => navigate("play")}
@@ -142,10 +142,10 @@ export function Layout({ nav, view, onNavigate, layoutMode, utility, children }:
             className={`inline-flex h-14 flex-col items-center justify-center gap-1 rounded-md text-xs transition ${
               menuOpen ? "text-[var(--color-accent)]" : "text-[var(--color-muted)]"
             }`}
-            aria-label={menuOpen ? "Menue schliessen" : "Menue oeffnen"}
+            aria-label={menuOpen ? "Menü schließen" : "Menü öffnen"}
           >
             {menuOpen ? <X size={20} /> : <Menu size={20} />}
-            Menue
+            Menü
           </button>
         </div>
       </nav>

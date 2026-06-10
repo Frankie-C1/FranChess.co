@@ -16,7 +16,7 @@ import { analyzeGame } from "../lib/analysis/analyzeGame";
 import { judgeMove } from "../lib/analysis/moveJudgement";
 import { boardColorsFor, buildSquareStyles, candidatesToArrows, canSelectPiece, formatEval, pieceColorAt, tryMove } from "../lib/chess/boardUi";
 import { engineUnavailableMessage, stockfishService } from "../lib/stockfish/StockfishService";
-import type { AnalysisDepth, AppSettings, EngineCandidateMove, StoredGame } from "../types";
+import type { AnalysisDepth, AppSettings, ChessColor, EngineCandidateMove, MoveAnalysis, StoredGame } from "../types";
 
 export function ViewerPage({
   games,
@@ -49,7 +49,7 @@ export function ViewerPage({
   const [suggestionError, setSuggestionError] = useState("");
   const [boardVersion, setBoardVersion] = useState(0);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const board = useResponsiveBoardWidth(panelCollapsed ? 560 : 430);
+  const board = useResponsiveBoardWidth(panelCollapsed ? 620 : 500);
   const boardColors = useMemo(
     () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
     [settings.boardTheme, settings.colorTheme, settings.darkMode]
@@ -60,6 +60,7 @@ export function ViewerPage({
   const position = variant?.fen ?? mainPosition;
   const activeMove = selectedGame?.analysis.find((move) => move.ply === activePly) ?? null;
   const currentEval = currentEvaluation(selectedGame, activePly);
+  const accuracy = useMemo(() => buildAccuracyStats(selectedGame), [selectedGame]);
   const judgement = activeMove
     ? judgeMove({
         playedUci: activeMove.playedUci,
@@ -177,8 +178,8 @@ export function ViewerPage({
   }
 
   return (
-    <div className={panelCollapsed ? "grid gap-6 xl:grid-cols-[minmax(460px,680px)_320px]" : "grid gap-6 xl:grid-cols-[440px_1fr]"}>
-      <section className="grid gap-4">
+    <div className={panelCollapsed ? "grid gap-5 xl:grid-cols-[minmax(540px,760px)_320px]" : "grid gap-5 xl:grid-cols-[minmax(520px,680px)_minmax(360px,1fr)]"}>
+      <section className="grid content-start gap-4">
         <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
           <div className="mb-3 flex items-center justify-between gap-3">
             <span className="text-sm font-semibold">Partie</span>
@@ -203,8 +204,7 @@ export function ViewerPage({
         </div>
 
         <div ref={board.ref} className="rounded-md border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-          <CapturedMaterialDisplay fen={position} orientation="white" />
-          <div className="mt-3 grid gap-3 sm:grid-cols-[36px_1fr]">
+          <div className="grid grid-cols-[30px_minmax(0,1fr)_48px] gap-3 sm:grid-cols-[36px_minmax(0,1fr)_64px]">
             <EvaluationBar cp={currentEval.cp} mate={currentEval.mate} />
             <div className="flex justify-center overflow-hidden">
               <Chessboard
@@ -224,8 +224,11 @@ export function ViewerPage({
                 customLightSquareStyle={{ backgroundColor: boardColors.light }}
               />
             </div>
+            <CapturedMaterialDisplay fen={position} orientation="white" layout="side" />
           </div>
-          <BoardControls current={activePly} max={maxPly} onChange={setPly} />
+          <div className="md:hidden">
+            <BoardControls current={activePly} max={maxPly} onChange={setPly} />
+          </div>
           {variant && (
             <div className="mt-3 w-full rounded-md bg-[#eef6ea] p-3 text-sm text-[#3f6b2e] dark:bg-[#1f3320] dark:text-[#b8d9a8]">
               Variante ab Zug {variant.fromPly + 1}: {variant.moves.join(" ")}
@@ -263,7 +266,11 @@ export function ViewerPage({
         </div>
       </section>
 
-      <section className="grid gap-4">
+      <section className="grid content-start gap-4">
+        {accuracy && <AccuracyPanel stats={accuracy} />}
+        <div className="hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm md:block">
+          <BoardControls current={activePly} max={maxPly} onChange={setPly} />
+        </div>
         {panelCollapsed ? (
           <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
             <ActionButton className="w-full" variant="quiet" onClick={() => setPanelCollapsed(false)} icon={<SlidersHorizontal size={16} />}>
@@ -366,6 +373,108 @@ function Row({ label, value }: { label: string; value: string | number }) {
       <span className="font-medium">{value}</span>
     </div>
   );
+}
+
+interface PlayerAccuracy {
+  color: ChessColor;
+  name: string;
+  overall: number | null;
+  opening: number | null;
+  middlegame: number | null;
+  endgame: number | null;
+  estimatedElo: number | null;
+  moves: number;
+}
+
+function AccuracyPanel({ stats }: { stats: { white: PlayerAccuracy; black: PlayerAccuracy } }) {
+  return (
+    <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
+      <h2 className="font-semibold">Genauigkeit & Spielqualität</h2>
+      <p className="mt-1 text-xs text-[var(--color-muted)]">Eigene Schätzung aus Centipawn Loss, Fehlerquote und analysierten Zügen.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+        <AccuracyCard stats={stats.white} />
+        <AccuracyCard stats={stats.black} />
+      </div>
+    </section>
+  );
+}
+
+function AccuracyCard({ stats }: { stats: PlayerAccuracy }) {
+  return (
+    <article className="rounded-md bg-[var(--color-surface-2)] p-3 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-semibold">{stats.name}</span>
+        <span className="text-xs text-[var(--color-muted)]">{stats.moves} Züge</span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <MiniRow label="Gesamt" value={formatAccuracy(stats.overall)} />
+        <MiniRow label="Eröffnung" value={formatAccuracy(stats.opening)} />
+        <MiniRow label="Mittelspiel" value={formatAccuracy(stats.middlegame)} />
+        <MiniRow label="Endspiel" value={formatAccuracy(stats.endgame)} />
+        <MiniRow label="Geschätzte Spielqualität" value={stats.estimatedElo ? `ca. ${stats.estimatedElo}` : "Nicht genug Daten"} />
+      </div>
+    </article>
+  );
+}
+
+function MiniRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3 border-b border-[var(--color-border)] pb-1 last:border-0">
+      <span className="text-[var(--color-muted)]">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
+}
+
+function buildAccuracyStats(game: StoredGame | null): { white: PlayerAccuracy; black: PlayerAccuracy } | null {
+  if (!game || game.analysis.length === 0) return null;
+  return {
+    white: buildPlayerAccuracy("w", game.metadata.white, game.analysis),
+    black: buildPlayerAccuracy("b", game.metadata.black, game.analysis)
+  };
+}
+
+function buildPlayerAccuracy(color: ChessColor, name: string, moves: MoveAnalysis[]): PlayerAccuracy {
+  const ownMoves = moves.filter((move) => move.color === color);
+  const byPhase = {
+    opening: ownMoves.filter((move) => move.moveNumber <= 10 || move.phase === "opening"),
+    middlegame: ownMoves.filter((move) => move.moveNumber > 10 && move.phase !== "endgame"),
+    endgame: ownMoves.filter((move) => move.phase === "endgame")
+  };
+  const overall = averageAccuracy(ownMoves);
+  const avgCpl = ownMoves.length ? ownMoves.reduce((sum, move) => sum + move.centipawnLoss, 0) / ownMoves.length : null;
+  const badMoves = ownMoves.filter((move) => move.centipawnLoss >= 150).length;
+  const badRate = ownMoves.length ? badMoves / ownMoves.length : 0;
+  const estimatedElo =
+    ownMoves.length >= 6 && overall !== null && avgCpl !== null
+      ? Math.max(600, Math.min(2600, Math.round((700 + overall * 16 - avgCpl * 1.1 - badRate * 350) / 50) * 50))
+      : null;
+
+  return {
+    color,
+    name,
+    overall,
+    opening: averageAccuracy(byPhase.opening),
+    middlegame: averageAccuracy(byPhase.middlegame),
+    endgame: averageAccuracy(byPhase.endgame),
+    estimatedElo,
+    moves: ownMoves.length
+  };
+}
+
+function averageAccuracy(moves: MoveAnalysis[]): number | null {
+  if (moves.length === 0) return null;
+  const total = moves.reduce((sum, move) => sum + moveAccuracy(move), 0);
+  return Math.round(total / moves.length);
+}
+
+function moveAccuracy(move: MoveAnalysis): number {
+  if (move.mateScore !== null && move.centipawnLoss > 0) return Math.max(0, 65 - move.centipawnLoss / 8);
+  return Math.max(0, Math.min(100, 100 - Math.pow(Math.max(0, move.centipawnLoss), 0.82) * 1.45));
+}
+
+function formatAccuracy(value: number | null): string {
+  return value === null ? "Nicht genug Daten" : `${value}%`;
 }
 
 function buildPosition(game: StoredGame | null, ply: number): string {

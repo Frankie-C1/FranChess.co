@@ -18,8 +18,8 @@ import type { CoachView, StoredGame } from "./types";
 const nav = [
   { id: "home", label: "Start", icon: Activity },
   { id: "upload", label: "Upload", icon: Upload },
-  { id: "dashboard", label: "Analyse", icon: BarChart3 },
-  { id: "viewer", label: "Viewer", icon: Eye },
+  { id: "dashboard", label: "Übersicht", icon: BarChart3 },
+  { id: "viewer", label: "Analyse", icon: Eye },
   { id: "play", label: "Coach", icon: Play },
   { id: "training", label: "Training", icon: Brain },
   { id: "export", label: "Export", icon: Download },
@@ -119,10 +119,19 @@ export default function App() {
       )}
       {view === "play" && <PlayPage settings={settings} onSettingsChange={setSettings} games={games} />}
       {view === "training" && (
-        <TrainingPage games={games} onUpload={() => navigate("upload")} onSelectGame={openTrainingGame} />
+        <TrainingPage games={games} onUpload={() => navigate("upload")} onSelectGame={openTrainingGame} settings={settings} />
       )}
       {view === "export" && <ExportPage games={games} onUpload={() => navigate("upload")} />}
-      {view === "settings" && <SettingsPage settings={settings} onSettingsChange={setSettings} games={games} onOpenGame={openGame} onToggleFavorite={toggleFavorite} />}
+      {view === "settings" && (
+        <SettingsPage
+          settings={settings}
+          onSettingsChange={setSettings}
+          games={games}
+          onGamesChange={updateGames}
+          onOpenGame={openGame}
+          onToggleFavorite={toggleFavorite}
+        />
+      )}
     </Layout>
     </>
   );

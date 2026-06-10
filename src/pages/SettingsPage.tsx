@@ -1,32 +1,32 @@
-import type { ReactNode } from "react";
-import { Columns3, Moon, Move, Palette, Search, Sparkles, Star } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Columns3, Database, Moon, Move, Palette, Search, Sparkles, Star, Trash2 } from "lucide-react";
 import type { AppSettings, BoardTheme, ColorTheme, EngineElo, LayoutMode, StoredGame } from "../types";
 
 const engineEloOptions: EngineElo[] = [800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, "max"];
 
 const colorThemes: Array<{ id: ColorTheme; label: string; detail: string; swatch: string }> = [
-  { id: "standard", label: "Standard Gruen/Braun", detail: "Ruhige Schach-App-Basis mit natuerlichem Gruen.", swatch: "#6a8f3f" },
+  { id: "standard", label: "Standard Grün/Braun", detail: "Ruhige Schach-App-Basis mit natürlichem Grün.", swatch: "#6a8f3f" },
   { id: "gold", label: "Schwarz/Gold", detail: "Dunkle Basis, warme goldene Akzente.", swatch: "#d6a934" },
   { id: "purple", label: "Schwarz/Lila", detail: "Dunkle Basis, gedimmte violette Akzente.", swatch: "#7353a1" },
-  { id: "wood", label: "Klassisch Holz", detail: "Warme Holz- und Sandtoene.", swatch: "#8b6239" },
-  { id: "gray", label: "Minimal Grau", detail: "Reduzierte neutrale Flaechen.", swatch: "#66705f" },
-  { id: "blueGray", label: "Blau/Grau", detail: "Kuehl, sachlich und ruhig.", swatch: "#4d7182" },
-  { id: "tournamentGreen", label: "Turnier Gruen", detail: "Konzentrierter Gruenton mit heller Oberflaeche.", swatch: "#4f7f36" },
+  { id: "wood", label: "Klassisch Holz", detail: "Warme Holz- und Sandtöne.", swatch: "#8b6239" },
+  { id: "gray", label: "Minimal Grau", detail: "Reduzierte neutrale Flächen.", swatch: "#66705f" },
+  { id: "blueGray", label: "Blau/Grau", detail: "Kühl, sachlich und ruhig.", swatch: "#4d7182" },
+  { id: "tournamentGreen", label: "Turnier Grün", detail: "Konzentrierter Grünton mit heller Oberfläche.", swatch: "#4f7f36" },
   { id: "nightBrown", label: "Nacht Braun", detail: "Dunkle, warme Brettclub-Stimmung.", swatch: "#7a6047" }
 ];
 
 const boardThemes: Array<{ id: BoardTheme; label: string; detail: string }> = [
-  { id: "auto", label: "Automatisch nach App-Theme", detail: "Waehlt eine passende Brettfarbe zur Palette." },
-  { id: "green", label: "Klassisch Gruen", detail: "Helles Gruen, gut lesbar fuer Analyse." },
+  { id: "auto", label: "Automatisch nach App-Theme", detail: "Wählt eine passende Brettfarbe zur Palette." },
+  { id: "green", label: "Klassisch Grün", detail: "Helles Grün, gut lesbar für Analyse." },
   { id: "wood", label: "Braun/Holz", detail: "Warme Holzoptik ohne starke Textur." },
-  { id: "gray", label: "Grau", detail: "Sehr ruhig fuer lange Analyse-Sessions." },
-  { id: "blueGray", label: "Blau/Grau", detail: "Kuehle, klare Brettkontraste." },
-  { id: "dark", label: "Dunkel", detail: "Gedimmtes Brett fuer Dark Mode." }
+  { id: "gray", label: "Grau", detail: "Sehr ruhig für lange Analyse-Sessions." },
+  { id: "blueGray", label: "Blau/Grau", detail: "Kühle, klare Brettkontraste." },
+  { id: "dark", label: "Dunkel", detail: "Gedimmtes Brett für Dark Mode." }
 ];
 
 const layoutModes: Array<{ id: LayoutMode; label: string; detail: string }> = [
   { id: "auto", label: "Automatisch", detail: "Handy unten, Desktop oben." },
-  { id: "top", label: "Web/Layout oben", detail: "Top-Navigation auf allen Geraeten." },
+  { id: "top", label: "Web/Layout oben", detail: "Top-Navigation auf allen Geräten." },
   { id: "bottom", label: "Mobile Layout unten", detail: "Bottom-Bar auch auf Desktop erzwingen." }
 ];
 
@@ -34,16 +34,21 @@ export function SettingsPage({
   settings,
   onSettingsChange,
   games,
+  onGamesChange,
   onOpenGame,
   onToggleFavorite
 }: {
   settings: AppSettings;
   onSettingsChange: (settings: AppSettings) => void;
   games: StoredGame[];
+  onGamesChange: (games: StoredGame[]) => Promise<void>;
   onOpenGame: (id: string) => void;
   onToggleFavorite: (id: string) => Promise<void>;
 }) {
   const favorites = games.filter((game) => game.favorite);
+  const [playerToDelete, setPlayerToDelete] = useState("");
+  const [dataMessage, setDataMessage] = useState("");
+  const analyzedCount = games.filter((game) => game.analysis.length > 0).length;
 
   function update(next: Partial<AppSettings>) {
     onSettingsChange({ ...settings, ...next });
@@ -54,7 +59,7 @@ export function SettingsPage({
       <SettingsSection icon={<Moon size={19} />} title="Darstellung">
         <ToggleRow
           label="Dark Mode"
-          description="Dunkles Farbschema dauerhaft verwenden. Neue Nutzer starten standardmaessig dunkel."
+          description="Dunkles Farbschema dauerhaft verwenden. Neue Nutzer starten standardmäßig dunkel."
           checked={settings.darkMode}
           onChange={(checked) => update({ darkMode: checked })}
         />
@@ -89,7 +94,7 @@ export function SettingsPage({
         </OptionGrid>
         <div className="mt-4">
           <ToggleRow
-            label="Verfuegbare Zuege anzeigen"
+            label="Verfügbare Züge anzeigen"
             description="Legale Zielfelder nach Auswahl einer Figur dezent markieren."
             checked={settings.showLegalMoves}
             onChange={(checked) => update({ showLegalMoves: checked })}
@@ -129,7 +134,7 @@ export function SettingsPage({
         <div className="mt-3">
           <ToggleRow
             label="Coach-/Gegnerfiguren bewegen erlauben"
-            description="Nur fuer Analyse- und Variantenmodus; echte Coach-Zuege bleiben geschuetzt."
+            description="Nur für Analyse- und Variantenmodus; echte Coach-Züge bleiben geschützt."
             checked={settings.allowOpponentMoves}
             onChange={(checked) => update({ allowOpponentMoves: checked })}
           />
@@ -138,8 +143,47 @@ export function SettingsPage({
 
       <SettingsSection icon={<Search size={19} />} title="Analyse">
         <p className="text-sm leading-6 text-[var(--color-muted)]">
-          Zugvorschlaege laufen nur auf Buttondruck. Vor- und Zuruecknavigation nutzt gespeicherte Analysewerte und startet keine neue Engineberechnung.
+          Zugvorschläge laufen nur auf Buttondruck. Vor- und Zurücknavigation nutzt gespeicherte Analysewerte und startet keine neue Engineberechnung.
         </p>
+      </SettingsSection>
+
+      <SettingsSection icon={<Database size={19} />} title="Daten verwalten">
+        <div className="grid gap-3 text-sm">
+          <div className="grid gap-2 rounded-md bg-[var(--color-surface-2)] p-3">
+            <Row label="Importierte Partien" value={games.length} />
+            <Row label="Analysierte Partien" value={analyzedCount} />
+            <Row label="Speicher grob" value={formatStorageSize(games)} />
+          </div>
+          <DangerButton
+            label="Alle importierten Partien löschen"
+            onClick={() => void deleteGames(games, "alle importierten Partien")}
+          />
+          <DangerButton
+            label="Partien älter als 1 Monat löschen"
+            onClick={() => void deleteGames(games.filter((game) => isOlderThanOneMonth(game.metadata.date)), "Partien älter als 1 Monat")}
+          />
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="delete-player">Spielername</label>
+            <input
+              id="delete-player"
+              value={playerToDelete}
+              onChange={(event) => setPlayerToDelete(event.target.value)}
+              className="h-11 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3"
+              placeholder="z. B. Francesco"
+            />
+            <DangerButton
+              label="Partien dieses Spielers löschen"
+              onClick={() => {
+                const needle = playerToDelete.trim().toLowerCase();
+                const matches = needle
+                  ? games.filter((game) => game.metadata.white.toLowerCase() === needle || game.metadata.black.toLowerCase() === needle)
+                  : [];
+                void deleteGames(matches, `Partien von ${playerToDelete.trim() || "diesem Spieler"}`);
+              }}
+            />
+          </div>
+          {dataMessage && <p className="rounded-md bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-muted)]">{dataMessage}</p>}
+        </div>
       </SettingsSection>
 
       <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm lg:col-span-2">
@@ -163,7 +207,7 @@ export function SettingsPage({
                     <span className="mt-1 block text-sm text-[var(--color-muted)]">
                       {game.metadata.result} - {game.metadata.date || "ohne Datum"} - {inferColor(game)}
                     </span>
-                    <span className="mt-1 block truncate text-sm text-[var(--color-muted)]">{game.metadata.opening || "Eroeffnung nicht im PGN"}</span>
+                    <span className="mt-1 block truncate text-sm text-[var(--color-muted)]">{game.metadata.opening || "Eröffnung nicht im PGN"}</span>
                   </button>
                   <button
                     type="button"
@@ -182,6 +226,18 @@ export function SettingsPage({
       </section>
     </div>
   );
+
+  async function deleteGames(matches: StoredGame[], label: string) {
+    if (matches.length === 0) {
+      setDataMessage("Keine passenden Partien gefunden.");
+      return;
+    }
+    const ok = window.confirm(`${matches.length} ${label} wirklich löschen? Einstellungen und Themes bleiben erhalten.`);
+    if (!ok) return;
+    const ids = new Set(matches.map((game) => game.id));
+    await onGamesChange(games.filter((game) => !ids.has(game.id)));
+    setDataMessage(`${matches.length} Partien gelöscht.`);
+  }
 }
 
 function SettingsSection({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
@@ -256,12 +312,51 @@ function ToggleRow({
   );
 }
 
+function Row({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-[var(--color-muted)]">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
+}
+
+function DangerButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+    >
+      <Trash2 size={16} />
+      {label}
+    </button>
+  );
+}
+
+function formatStorageSize(games: StoredGame[]): string {
+  const bytes = new Blob([JSON.stringify(games)]).size;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function isOlderThanOneMonth(dateValue: string): boolean {
+  if (!dateValue) return false;
+  const normalized = dateValue.replace(/\./g, "-");
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return false;
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 1);
+  return date < cutoff;
+}
+
 function parseEngineElo(value: string): EngineElo {
   return value === "max" ? "max" : (Number(value) as EngineElo);
 }
 
 function inferColor(game: StoredGame): string {
-  if (game.source?.importedBy && game.metadata.white.toLowerCase() === game.source.importedBy.toLowerCase()) return "Weiss";
+  if (game.source?.importedBy && game.metadata.white.toLowerCase() === game.source.importedBy.toLowerCase()) return "Weiß";
   if (game.source?.importedBy && game.metadata.black.toLowerCase() === game.source.importedBy.toLowerCase()) return "Schwarz";
   return "Farbe unbekannt";
 }

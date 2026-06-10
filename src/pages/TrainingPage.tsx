@@ -5,7 +5,8 @@ import { Chessboard } from "react-chessboard";
 import { BookOpen, Brain, CheckCircle2, FileText, Puzzle, Target, Upload, XCircle } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
 import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
-import type { StoredGame, TrainingTask } from "../types";
+import { boardColorsFor, buildSquareStyles, pieceColorAt } from "../lib/chess/boardUi";
+import type { AppSettings, StoredGame, TrainingTask } from "../types";
 
 type TrainingArea = "training" | "puzzles" | "openings";
 
@@ -53,11 +54,13 @@ const bundledOpeningsIndex = "/data/openings/index.json";
 export function TrainingPage({
   games,
   onUpload,
-  onSelectGame
+  onSelectGame,
+  settings
 }: {
   games: StoredGame[];
   onUpload: () => void;
   onSelectGame: (id: string, ply: number) => void;
+  settings: AppSettings;
 }) {
   const [area, setArea] = useState<TrainingArea>("training");
   const tasks = useMemo(() => buildTasks(games), [games]);
@@ -68,19 +71,19 @@ export function TrainingPage({
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-medium text-[var(--color-muted)]">Training</p>
-            <h1 className="mt-1 text-2xl font-semibold">Ueben aus echten Stellungen</h1>
+            <h1 className="mt-1 text-2xl font-semibold">Üben aus echten Stellungen</h1>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <AreaButton icon={<Target size={17} />} active={area === "training"} label="Training" onClick={() => setArea("training")} />
             <AreaButton icon={<Puzzle size={17} />} active={area === "puzzles"} label="Puzzles" onClick={() => setArea("puzzles")} />
-            <AreaButton icon={<BookOpen size={17} />} active={area === "openings"} label="Eroeffnungen" onClick={() => setArea("openings")} />
+            <AreaButton icon={<BookOpen size={17} />} active={area === "openings"} label="Eröffnungen" onClick={() => setArea("openings")} />
           </div>
         </div>
       </section>
 
       {area === "training" && <TrainingTasks tasks={tasks} onUpload={onUpload} onSelectGame={onSelectGame} />}
-      {area === "puzzles" && <PuzzleTrainer />}
-      {area === "openings" && <OpeningTrainer />}
+      {area === "puzzles" && <PuzzleTrainer settings={settings} />}
+      {area === "openings" && <OpeningTrainer settings={settings} />}
     </div>
   );
 }
@@ -123,7 +126,7 @@ function TrainingTasks({
             <Target className="shrink-0 text-[var(--color-accent)]" size={22} />
           </div>
           <ActionButton className="mt-4 w-full" variant="quiet" onClick={() => onSelectGame(task.gameId, task.ply)}>
-            Stellung im Viewer oeffnen
+            Stellung in Analyse öffnen
           </ActionButton>
         </article>
       ))}
@@ -131,7 +134,7 @@ function TrainingTasks({
   );
 }
 
-function PuzzleTrainer() {
+function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   const [puzzles, setPuzzles] = useState<LichessPuzzle[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "missing" | "empty" | "error">("loading");
   const [rating, setRating] = useState("all");
@@ -139,10 +142,21 @@ function PuzzleTrainer() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [game, setGame] = useState(() => new Chess());
   const [solutionIndex, setSolutionIndex] = useState(0);
-  const [message, setMessage] = useState("Waehle ein Puzzle.");
+  const [message, setMessage] = useState("Wähle ein Puzzle.");
   const [status, setStatus] = useState<"idle" | "correct" | "wrong" | "solved">("idle");
   const [showSolution, setShowSolution] = useState(false);
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [boardVersion, setBoardVersion] = useState(0);
   const board = useResponsiveBoardWidth(420);
+  const orientation = game.turn() === "b" ? "black" : "white";
+  const boardColors = useMemo(
+    () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
+    [settings.boardTheme, settings.colorTheme, settings.darkMode]
+  );
+  const squareStyles = useMemo(
+    () => buildSquareStyles({ fen: game.fen(), selectedSquare, showLegalMoves: settings.showLegalMoves }),
+    [game, selectedSquare, settings.showLegalMoves]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -197,10 +211,12 @@ function PuzzleTrainer() {
       setSolutionIndex(1);
       setStatus("idle");
       setShowSolution(false);
-      setMessage("Finde den naechsten Zug der Loesung.");
+      setSelectedSquare(null);
+      setBoardVersion((value) => value + 1);
+      setMessage("Finde den nächsten Zug der Lösung.");
     } catch {
       setStatus("wrong");
-      setMessage("Puzzle-FEN oder Startzug ist ungueltig.");
+      setMessage("Puzzle-FEN oder Startzug ist ungültig.");
     }
   }
 
@@ -211,7 +227,9 @@ function PuzzleTrainer() {
     const promotion = expected?.[4] ?? "q";
     if (!expected || !expected.startsWith(played)) {
       setStatus("wrong");
-      setMessage("Nicht korrekt. Die Figur springt zurueck.");
+      setSelectedSquare(null);
+      setBoardVersion((value) => value + 1);
+      setMessage("Nicht korrekt. Die Figur springt zurück.");
       return false;
     }
 
@@ -224,6 +242,8 @@ function PuzzleTrainer() {
     }
     if (!userMove) {
       setStatus("wrong");
+      setSelectedSquare(null);
+      setBoardVersion((value) => value + 1);
       setMessage("Illegaler Zug.");
       return false;
     }
@@ -234,38 +254,59 @@ function PuzzleTrainer() {
         next.move({ from: opponent.slice(0, 2), to: opponent.slice(2, 4), promotion: opponent[4] || "q" });
       } catch {
         setStatus("wrong");
-        setMessage("Antwortzug im Puzzle-Datensatz ist ungueltig.");
+        setMessage("Antwortzug im Puzzle-Datensatz ist ungültig.");
       }
     }
 
     const nextIndex = solutionIndex + (opponent ? 2 : 1);
     setGame(next);
+    setSelectedSquare(null);
     setSolutionIndex(nextIndex);
     const solved = nextIndex >= activePuzzle.moves.length;
     setStatus(solved ? "solved" : "correct");
-    setMessage(solved ? "Geloest." : "Richtig. Naechster Zug.");
+    setMessage(solved ? "Gelöst." : "Richtig. Nächster Zug.");
     return true;
+  }
+
+  function onPuzzleSquareClick(square: Square) {
+    if (selectedSquare) {
+      const targetColor = pieceColorAt(game.fen(), square);
+      const selectedColor = pieceColorAt(game.fen(), selectedSquare);
+      if (targetColor && targetColor === selectedColor && targetColor === game.turn()) {
+        setSelectedSquare(square);
+        return;
+      }
+      if (onPuzzleDrop(selectedSquare, square)) return;
+      setSelectedSquare(null);
+      return;
+    }
+    setSelectedSquare(pieceColorAt(game.fen(), square) === game.turn() ? square : null);
   }
 
   function revealSolution() {
     setShowSolution(true);
-    setMessage(activePuzzle ? `Loesung: ${activePuzzle.moves.slice(1).join(" ")}` : "Keine Loesung geladen.");
+    setMessage(activePuzzle ? `Lösung: ${activePuzzle.moves.slice(1).join(" ")}` : "Keine Lösung geladen.");
   }
 
   if (loadState === "loading") return <Panel title="Puzzles laden" text="Suche nach public/data/puzzles.json ..." />;
   if (loadState === "missing" || loadState === "empty") return <PuzzleImportGuide />;
-  if (loadState === "error") return <Panel title="Puzzle-Daten konnten nicht geladen werden" text="Pruefe public/data/puzzles.json oder importiere die CSV erneut." />;
+  if (loadState === "error") return <Panel title="Puzzle-Daten konnten nicht geladen werden" text="Prüfe public/data/puzzles.json oder importiere die CSV erneut." />;
 
   return (
     <section className="grid gap-5 lg:grid-cols-[minmax(320px,460px)_1fr]">
       <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
         <Chessboard
+          key={`puzzle-${boardVersion}`}
           id="franchess-puzzle"
           position={game.fen()}
           boardWidth={board.width}
+          boardOrientation={orientation}
           onPieceDrop={(from, to) => onPuzzleDrop(from as Square, to as Square)}
-          customDarkSquareStyle={{ backgroundColor: "#769656" }}
-          customLightSquareStyle={{ backgroundColor: "#eeeed2" }}
+          onSquareClick={(square) => onPuzzleSquareClick(square as Square)}
+          isDraggablePiece={({ sourceSquare }) => pieceColorAt(game.fen(), sourceSquare as Square) === game.turn()}
+          customSquareStyles={squareStyles}
+          customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+          customLightSquareStyle={{ backgroundColor: boardColors.light }}
           animationDuration={160}
           autoPromoteToQueen
         />
@@ -286,7 +327,7 @@ function PuzzleTrainer() {
                 <option value="all">Alle</option>
                 <option value="low">bis 1400</option>
                 <option value="mid">1401-2000</option>
-                <option value="high">ueber 2000</option>
+                <option value="high">über 2000</option>
               </select>
             </label>
             <label className="grid gap-2 text-sm">
@@ -299,8 +340,8 @@ function PuzzleTrainer() {
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <ActionButton variant="quiet" onClick={() => activePuzzle && startPuzzle(activePuzzle)}>Neu starten</ActionButton>
-            <ActionButton variant="quiet" onClick={revealSolution}>Loesung anzeigen</ActionButton>
-            <ActionButton onClick={() => setActiveIndex((value) => (filtered.length ? (value + 1) % filtered.length : 0))}>Naechstes Puzzle</ActionButton>
+            <ActionButton variant="quiet" onClick={revealSolution}>Lösung anzeigen</ActionButton>
+            <ActionButton onClick={() => setActiveIndex((value) => (filtered.length ? (value + 1) % filtered.length : 0))}>Nächstes Puzzle</ActionButton>
           </div>
           {showSolution && activePuzzle && <p className="mt-3 rounded-md bg-[var(--color-surface-2)] p-3 text-sm">{activePuzzle.moves.slice(1).join(" ")}</p>}
           {activePuzzle && (
@@ -315,16 +356,27 @@ function PuzzleTrainer() {
   );
 }
 
-function OpeningTrainer() {
+function OpeningTrainer({ settings }: { settings: AppSettings }) {
   const [lines, setLines] = useState<OpeningLine[]>([]);
   const [pgn, setPgn] = useState("");
   const [activeLine, setActiveLine] = useState<OpeningLine | null>(null);
   const [game, setGame] = useState(() => new Chess());
   const [path, setPath] = useState<string[]>([]);
   const [targetNodeId, setTargetNodeId] = useState<string | null>(null);
-  const [message, setMessage] = useState("Eroeffnungs-PGN importieren oder gespeicherte Linie waehlen.");
+  const [message, setMessage] = useState("Eröffnungs-PGN importieren oder gespeicherte Linie wählen.");
   const [status, setStatus] = useState<"idle" | "correct" | "wrong" | "solved">("idle");
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [boardVersion, setBoardVersion] = useState(0);
   const board = useResponsiveBoardWidth(420);
+  const orientation = game.turn() === "b" ? "black" : "white";
+  const boardColors = useMemo(
+    () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
+    [settings.boardTheme, settings.colorTheme, settings.darkMode]
+  );
+  const squareStyles = useMemo(
+    () => buildSquareStyles({ fen: game.fen(), selectedSquare, showLegalMoves: settings.showLegalMoves }),
+    [game, selectedSquare, settings.showLegalMoves]
+  );
 
   const currentOptions = useMemo(() => findOpeningOptions(activeLine, path), [activeLine, path]);
   const targetNode = currentOptions.find((node) => node.id === targetNodeId) ?? currentOptions[0] ?? null;
@@ -371,7 +423,7 @@ function OpeningTrainer() {
     const parsed = parseOpeningPgn(pgn);
     if (!parsed) {
       setStatus("wrong");
-      setMessage("PGN konnte nicht gelesen werden. Bitte PGN mit legalen Zuegen einfuegen.");
+        setMessage("PGN konnte nicht gelesen werden. Bitte PGN mit legalen Zügen einfügen.");
       return;
     }
     saveCustomLines([parsed, ...lines.filter((line) => line.id !== parsed.id)].slice(0, 24));
@@ -403,12 +455,14 @@ function OpeningTrainer() {
   function startLine(line: OpeningLine, resumePath: string[] = []) {
     const resumed = positionFromPath(line, resumePath);
     setActiveLine(line);
-    setGame(resumed.chess);
-    setPath(resumed.path);
-    setTargetNodeId(null);
-    setStatus("idle");
-    const options = findOpeningOptions(line, resumed.path);
-    setMessage(options[0]?.comment || (resumed.path.length ? "Fortschritt geladen. Finde den naechsten Zug." : "Finde den naechsten Zug der Linie."));
+      setGame(resumed.chess);
+      setPath(resumed.path);
+      setTargetNodeId(null);
+      setSelectedSquare(null);
+      setBoardVersion((value) => value + 1);
+      setStatus("idle");
+      const options = findOpeningOptions(line, resumed.path);
+    setMessage(options[0]?.comment || (resumed.path.length ? "Fortschritt geladen. Finde den nächsten Zug." : "Finde den nächsten Zug der Linie."));
   }
 
   function resetLine() {
@@ -428,11 +482,14 @@ function OpeningTrainer() {
     }
     if (!move || move.san !== targetNode.san) {
       setStatus("wrong");
-      setMessage("Falscher Zug. Die Figur springt zurueck.");
+      setSelectedSquare(null);
+      setBoardVersion((value) => value + 1);
+      setMessage("Falscher Zug. Die Figur springt zurück.");
       return false;
     }
     const nextPath = [...path, targetNode.id];
     setGame(next);
+    setSelectedSquare(null);
     setPath(nextPath);
     saveOpeningProgress(activeLine.id, nextPath);
     const nextOptions = targetNode.children;
@@ -443,23 +500,43 @@ function OpeningTrainer() {
     return true;
   }
 
+  function onOpeningSquareClick(square: Square) {
+    if (selectedSquare) {
+      const targetColor = pieceColorAt(game.fen(), square);
+      const selectedColor = pieceColorAt(game.fen(), selectedSquare);
+      if (targetColor && targetColor === selectedColor && targetColor === game.turn()) {
+        setSelectedSquare(square);
+        return;
+      }
+      if (onOpeningDrop(selectedSquare, square)) return;
+      setSelectedSquare(null);
+      return;
+    }
+    setSelectedSquare(pieceColorAt(game.fen(), square) === game.turn() ? square : null);
+  }
+
   return (
     <section className="grid gap-5 lg:grid-cols-[minmax(320px,460px)_1fr]">
       <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
         <Chessboard
+          key={`opening-${boardVersion}`}
           id="franchess-openings"
           position={game.fen()}
           boardWidth={board.width}
+          boardOrientation={orientation}
           onPieceDrop={(from, to) => onOpeningDrop(from as Square, to as Square)}
-          customDarkSquareStyle={{ backgroundColor: "#b4875d" }}
-          customLightSquareStyle={{ backgroundColor: "#ead7b7" }}
+          onSquareClick={(square) => onOpeningSquareClick(square as Square)}
+          isDraggablePiece={({ sourceSquare }) => pieceColorAt(game.fen(), sourceSquare as Square) === game.turn()}
+          customSquareStyles={squareStyles}
+          customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+          customLightSquareStyle={{ backgroundColor: boardColors.light }}
           animationDuration={160}
           autoPromoteToQueen
         />
       </div>
       <div className="grid content-start gap-4">
         <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">Eroeffnungs-PGN importieren</h2>
+          <h2 className="text-lg font-semibold">Eröffnungs-PGN importieren</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
             PGN-Text oder PGN-Datei importieren. Hauptvariante, Nebenvarianten und Kommentare werden als Variantenbaum gespeichert.
           </p>
@@ -482,7 +559,7 @@ function OpeningTrainer() {
         <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Eroeffnungstraining</h2>
+              <h2 className="text-lg font-semibold">Eröffnungstraining</h2>
               <p className="mt-2 rounded-md bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-muted)]">{message}</p>
             </div>
             <StatusBadge status={status} />
@@ -494,7 +571,7 @@ function OpeningTrainer() {
               </p>
               {targetNode && (
                 <p className="mt-2 text-sm">
-                  Naechster Zielzug: <span className="font-semibold">{targetNode.san}</span>
+                  Nächster Zielzug: <span className="font-semibold">{targetNode.san}</span>
                 </p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
@@ -506,14 +583,14 @@ function OpeningTrainer() {
               </div>
             </>
           ) : (
-            <p className="mt-3 text-sm text-[var(--color-muted)]">Noch keine Eroeffnung importiert. Nutze PGN-Text oder PGN-Datei oben.</p>
+            <p className="mt-3 text-sm text-[var(--color-muted)]">Noch keine Eröffnung importiert. Nutze PGN-Text oder PGN-Datei oben.</p>
           )}
           {lines.length > 0 && (
             <div className="mt-4 grid gap-2">
-              <h3 className="text-sm font-semibold">Gespeicherte Eroeffnungen</h3>
+              <h3 className="text-sm font-semibold">Gespeicherte Eröffnungen</h3>
               {lines.map((line) => (
                 <button key={line.id} type="button" onClick={() => startLine(line, loadOpeningProgress(line.id)?.path ?? [])} className="rounded-md border border-[var(--color-border)] p-3 text-left text-sm hover:bg-[var(--color-surface-2)]">
-                  {line.name}{line.variation ? ` - ${line.variation}` : ""} - {countNodes(line.root)} Zuege
+                  {line.name}{line.variation ? ` - ${line.variation}` : ""} - {countNodes(line.root)} Züge
                 </button>
               ))}
             </div>
@@ -537,7 +614,7 @@ function OpeningTree({
   onSelectTarget: (id: string) => void;
   depth?: number;
 }) {
-  if (nodes.length === 0) return <p className="text-sm text-[var(--color-muted)]">Keine weiteren Zuege.</p>;
+  if (nodes.length === 0) return <p className="text-sm text-[var(--color-muted)]">Keine weiteren Züge.</p>;
   return (
     <div className="grid gap-2">
       {nodes.map((node) => {
@@ -586,7 +663,7 @@ function AreaButton({ icon, active, label, onClick }: { icon: ReactNode; active:
 function StatusBadge({ status }: { status: "idle" | "correct" | "wrong" | "solved" }) {
   if (status === "correct") return <span className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-1 text-xs text-green-800"><CheckCircle2 size={14} />Richtig</span>;
   if (status === "wrong") return <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs text-red-800"><XCircle size={14} />Falsch</span>;
-  if (status === "solved") return <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-accent)]"><CheckCircle2 size={14} />Geloest</span>;
+  if (status === "solved") return <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-accent)]"><CheckCircle2 size={14} />Gelöst</span>;
   return <span className="rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-muted)]">Bereit</span>;
 }
 
@@ -607,7 +684,7 @@ function PuzzleImportGuide() {
         <h2 className="text-lg font-semibold">Puzzle-Daten importieren</h2>
       </div>
       <p className="mt-3 text-sm leading-6 text-[var(--color-muted)]">
-        Es werden keine Puzzle-Platzhalter angezeigt. Lade die offizielle Lichess Puzzle Database CSV von https://database.lichess.org/#puzzles herunter. Lichess veroeffentlicht diese Daten unter Creative Commons CC0.
+        Es werden keine Puzzle-Platzhalter angezeigt. Lade die offizielle Lichess Puzzle Database CSV von https://database.lichess.org/#puzzles herunter. Lichess veröffentlicht diese Daten unter Creative Commons CC0.
       </p>
       <pre className="mt-4 overflow-x-auto rounded-md bg-[var(--color-surface-2)] p-3 text-xs">node scripts/import-lichess-puzzles.mjs path/to/lichess_db_puzzle.csv public/data/puzzles.json 1000</pre>
     </section>
@@ -638,9 +715,9 @@ function humanCategory(category: string): string {
     blunder: "Grober Patzer",
     mistake: "Fehler",
     inaccuracy: "Ungenauigkeit",
-    hanging_piece: "Haengende Figur",
+    hanging_piece: "Hängende Figur",
     undefended_piece: "Ungedeckte Figur",
-    king_safety: "Koenigssicherheit",
+    king_safety: "Königssicherheit",
     tactical_blunder: "Taktischer Patzer",
     missed_mate: "Verpasstes Matt"
   };

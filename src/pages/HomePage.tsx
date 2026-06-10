@@ -19,9 +19,9 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-medium text-[var(--color-muted)]">Trainer-Zentrale</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Willkommen zurueck.</h1>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Willkommen zurück.</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-muted)]">
-              Waehle eine Partie, starte den Coach oder arbeite direkt an den Mustern, die deine Analysen zeigen.
+              Wähle eine Partie, starte den Coach oder arbeite direkt an den Mustern, die deine Analysen zeigen.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -43,11 +43,11 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
         <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Zuletzt importiert</h2>
-            <ActionButton variant="quiet" onClick={() => onNavigate("viewer")} icon={<Eye size={16} />}>Viewer oeffnen</ActionButton>
+            <ActionButton variant="quiet" onClick={() => onNavigate("viewer")} icon={<Eye size={16} />}>Analyse öffnen</ActionButton>
           </div>
           {recentGames.length === 0 ? (
             <p className="rounded-md bg-[var(--color-surface-2)] p-4 text-sm text-[var(--color-muted)]">
-              Noch keine Partien gespeichert. Importiere ein PGN oder lade Partien ueber Chess.com.
+              Noch keine Partien gespeichert. Importiere ein PGN oder lade Partien über Chess.com.
             </p>
           ) : (
             <div className="grid gap-3">
@@ -75,8 +75,8 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
             <h2 className="text-lg font-semibold">Analyse-Fokus</h2>
             <p className="mt-3 text-sm leading-6 text-[var(--color-muted)]">
               {topCategory
-                ? `Haeufigstes Muster: ${humanCategory(topCategory.category)} (${topCategory.count}x).`
-                : "Sobald analysierte Partien vorhanden sind, erscheint hier dein haeufigstes Fehlermuster."}
+                ? `Häufigstes Muster: ${humanCategory(topCategory.category)} (${topCategory.count}x).`
+                : "Sobald analysierte Partien vorhanden sind, erscheint hier dein häufigstes Fehlermuster."}
             </p>
           </div>
 
@@ -85,8 +85,8 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
             <div className="mt-4 grid gap-2">
               <QuickAction icon={<Play size={17} />} label="Coach starten" onClick={() => onNavigate("play")} />
               <QuickAction icon={<Upload size={17} />} label="Partie importieren" onClick={() => onNavigate("upload")} />
-              <QuickAction icon={<Eye size={17} />} label="Viewer oeffnen" onClick={() => onNavigate("viewer")} />
-              <QuickAction icon={<Brain size={17} />} label="Training oeffnen" onClick={() => onNavigate("training")} />
+              <QuickAction icon={<Eye size={17} />} label="Analyse öffnen" onClick={() => onNavigate("viewer")} />
+              <QuickAction icon={<Brain size={17} />} label="Training öffnen" onClick={() => onNavigate("training")} />
               <QuickAction icon={<BarChart3 size={17} />} label="Analyse-Dashboard" onClick={() => onNavigate("dashboard")} />
             </div>
           </div>
@@ -117,9 +117,9 @@ function shortDate(value: string): string {
 
 function humanCategory(category: string): string {
   const labels: Record<string, string> = {
-    hanging_piece: "haengende Figuren",
+    hanging_piece: "hängende Figuren",
     undefended_piece: "ungedeckte Figuren",
-    king_safety: "Koenigssicherheit",
+    king_safety: "Königssicherheit",
     bad_development: "Entwicklung",
     missed_mate: "verpasste Mattmotive",
     tactical_blunder: "taktische Patzer",
