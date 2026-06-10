@@ -1,0 +1,34 @@
+[Event "FranChess Opening Trainer"]
+[Opening "Italian Game"]
+[Variation "Main Line"]
+[Result "*"]
+
+1. e4 {Kontrolliert das Zentrum und öffnet Dame sowie Läufer.}
+1... e5 {Schwarz antwortet symmetrisch und beansprucht ebenfalls das Zentrum.}
+
+2. Nf3 {Entwickelt eine Figur und greift e5 an.}
+2... Nc6 {Verteidigt e5 und entwickelt eine Figur.}
+
+3. Bc4 {Der Läufer zielt auf den empfindlichen Punkt f7.}
+3... Bc5 {Schwarz entwickelt sich ebenfalls aktiv.}
+
+4. c3 {Bereitet d4 vor und stärkt das Zentrum.}
+4... Nf6 {Entwicklung und Angriff auf e4.}
+
+5. d4 {Zentrum öffnen und Raum gewinnen.}
+5... exd4
+
+6. cxd4 {Starke Bauernpräsenz im Zentrum.}
+6... Bb4+
+
+7. Nc3 {Entwicklung mit Tempo.}
+7... Nxe4
+
+8. O-O {König in Sicherheit bringen ist wichtiger als Bauernjagd.}
+8... Bxc3
+
+9. d5 {Raumgewinn und Angriff auf den Springer.}
+9... Bf6
+
+10. Re1 {Druck auf die e-Linie.}
+*

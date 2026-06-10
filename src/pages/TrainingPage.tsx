@@ -24,6 +24,7 @@ interface OpeningNode {
   san: string;
   uci: string;
   comment: string;
+  nags: string[];
   fenBefore: string;
   fenAfter: string;
   children: OpeningNode[];
@@ -32,7 +33,9 @@ interface OpeningNode {
 interface OpeningLine {
   id: string;
   name: string;
+  variation?: string;
   importedAt: string;
+  source?: string;
   root: OpeningNode[];
 }
 
@@ -45,6 +48,7 @@ interface OpeningProgress {
 const puzzleThemes = ["fork", "pin", "mate", "hangingPiece", "endgame", "advantage", "crushing", "discoveredAttack", "opening"];
 const openingStorageKey = "franchess.openingLines.v2";
 const openingProgressKey = "franchess.openingProgress.v1";
+const bundledOpeningsIndex = "/data/openings/index.json";
 
 export function TrainingPage({
   games,
@@ -312,9 +316,9 @@ function PuzzleTrainer() {
 }
 
 function OpeningTrainer() {
-  const [lines, setLines] = useState<OpeningLine[]>(() => loadOpeningLines());
+  const [lines, setLines] = useState<OpeningLine[]>([]);
   const [pgn, setPgn] = useState("");
-  const [activeLine, setActiveLine] = useState<OpeningLine | null>(() => loadOpeningLines()[0] ?? null);
+  const [activeLine, setActiveLine] = useState<OpeningLine | null>(null);
   const [game, setGame] = useState(() => new Chess());
   const [path, setPath] = useState<string[]>([]);
   const [targetNodeId, setTargetNodeId] = useState<string | null>(null);
@@ -326,9 +330,35 @@ function OpeningTrainer() {
   const targetNode = currentOptions.find((node) => node.id === targetNodeId) ?? currentOptions[0] ?? null;
 
   useEffect(() => {
-    if (!activeLine) return;
-    const saved = loadOpeningProgress(activeLine.id);
-    startLine(activeLine, saved?.path ?? []);
+    let cancelled = false;
+    async function loadLines() {
+      const localLines = loadOpeningLines();
+      let bundledLines: OpeningLine[] = [];
+      try {
+        const response = await fetch(bundledOpeningsIndex);
+        if (response.ok) {
+          const index = (await response.json()) as Array<{ id: string; path: string }>;
+          const loaded = await Promise.all(
+            index.map(async (entry) => {
+              const pgnResponse = await fetch(entry.path);
+              if (!pgnResponse.ok) return null;
+              return parseOpeningPgn(await pgnResponse.text(), entry.path, entry.id);
+            })
+          );
+          bundledLines = loaded.filter((line): line is OpeningLine => Boolean(line));
+        }
+      } catch {
+        bundledLines = [];
+      }
+      if (cancelled) return;
+      const merged = mergeOpeningLines(bundledLines, localLines);
+      setLines(merged);
+      if (merged[0]) startLine(merged[0], loadOpeningProgress(merged[0].id)?.path ?? []);
+    }
+    void loadLines();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -344,7 +374,7 @@ function OpeningTrainer() {
       setMessage("PGN konnte nicht gelesen werden. Bitte PGN mit legalen Zuegen einfuegen.");
       return;
     }
-    saveLines([parsed, ...lines.filter((line) => line.id !== parsed.id)].slice(0, 20));
+    saveCustomLines([parsed, ...lines.filter((line) => line.id !== parsed.id)].slice(0, 24));
     startLine(parsed, []);
   }
 
@@ -353,21 +383,21 @@ function OpeningTrainer() {
     const reader = new FileReader();
     reader.onload = () => {
       setPgn(String(reader.result ?? ""));
-      const parsed = parseOpeningPgn(String(reader.result ?? ""));
+      const parsed = parseOpeningPgn(String(reader.result ?? ""), file.name);
       if (!parsed) {
         setStatus("wrong");
         setMessage("PGN-Datei konnte nicht gelesen werden.");
         return;
       }
-      saveLines([parsed, ...lines.filter((line) => line.id !== parsed.id)].slice(0, 20));
+      saveCustomLines([parsed, ...lines.filter((line) => line.id !== parsed.id)].slice(0, 24));
       startLine(parsed, []);
     };
     reader.readAsText(file);
   }
 
-  function saveLines(next: OpeningLine[]) {
+  function saveCustomLines(next: OpeningLine[]) {
     setLines(next);
-    window.localStorage.setItem(openingStorageKey, JSON.stringify(next));
+    window.localStorage.setItem(openingStorageKey, JSON.stringify(next.filter((line) => !isBundledOpening(line))));
   }
 
   function startLine(line: OpeningLine, resumePath: string[] = []) {
@@ -460,7 +490,7 @@ function OpeningTrainer() {
           {activeLine ? (
             <>
               <p className="mt-3 text-sm">
-                {activeLine.name} - Fortschritt {path.length}/{countMainDepth(activeLine.root)}
+                {activeLine.name}{activeLine.variation ? ` - ${activeLine.variation}` : ""} - Fortschritt {path.length}/{countMainDepth(activeLine.root)}
               </p>
               {targetNode && (
                 <p className="mt-2 text-sm">
@@ -483,7 +513,7 @@ function OpeningTrainer() {
               <h3 className="text-sm font-semibold">Gespeicherte Eroeffnungen</h3>
               {lines.map((line) => (
                 <button key={line.id} type="button" onClick={() => startLine(line, loadOpeningProgress(line.id)?.path ?? [])} className="rounded-md border border-[var(--color-border)] p-3 text-left text-sm hover:bg-[var(--color-surface-2)]">
-                  {line.name} - {countNodes(line.root)} Zuege
+                  {line.name}{line.variation ? ` - ${line.variation}` : ""} - {countNodes(line.root)} Zuege
                 </button>
               ))}
             </div>
@@ -527,6 +557,7 @@ function OpeningTree({
               }`}
             >
               <span className="font-semibold">{node.san}</span>
+              {node.nags?.length > 0 && <span className="ml-1 text-[var(--color-accent)]">{node.nags.join(" ")}</span>}
               {node.comment && <span className="ml-2 text-[var(--color-muted)]">{node.comment}</span>}
             </button>
             {node.children.length > 0 && <OpeningTree nodes={node.children} currentOptions={currentOptions} targetNodeId={targetNodeId} onSelectTarget={onSelectTarget} depth={depth + 1} />}
@@ -644,8 +675,9 @@ function loadAllOpeningProgress(): OpeningProgress[] {
   }
 }
 
-function parseOpeningPgn(pgn: string): OpeningLine | null {
-  const name = pgn.match(/\[Event\s+"([^"]+)"/)?.[1] || pgn.match(/\[Opening\s+"([^"]+)"/)?.[1] || "Importierte Linie";
+function parseOpeningPgn(pgn: string, source?: string, forcedId?: string): OpeningLine | null {
+  const name = pgn.match(/\[Opening\s+"([^"]+)"/)?.[1] || pgn.match(/\[Event\s+"([^"]+)"/)?.[1] || "Importierte Linie";
+  const variation = pgn.match(/\[Variation\s+"([^"]+)"/)?.[1] || undefined;
   const body = pgn.replace(/\[[^\]]+\]/g, " ");
   const tokens = tokenizePgn(body);
   const root: OpeningNode[] = [];
@@ -670,9 +702,14 @@ function parseOpeningPgn(pgn: string): OpeningLine | null {
       else frame.pendingComment = joinComment(frame.pendingComment, comment);
       continue;
     }
+    if (/^\$\d+$/.test(token)) {
+      if (frame.lastNode) frame.lastNode.nags = [...(frame.lastNode.nags ?? []), token];
+      continue;
+    }
     if (isPgnNoise(token)) continue;
 
-    const san = token.replace(/[!?+#]+$/g, (suffix) => suffix.replace(/[+#]/g, ""));
+    const nags = extractNags(token);
+    const san = token.replace(/[!?+#]+$/g, (suffix) => suffix.replace(/[!?]/g, "").replace(/[+#]/g, ""));
     const fenBefore = frame.chess.fen();
     let move = null;
     try {
@@ -683,10 +720,11 @@ function parseOpeningPgn(pgn: string): OpeningLine | null {
     if (!move) continue;
 
     const node: OpeningNode = {
-      id: `${move.from}${move.to}${move.promotion ?? ""}-${frame.nodes.length}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `${move.from}${move.to}${move.promotion ?? ""}-${frame.nodes.length}-${fenBefore.split(" ")[0].slice(0, 8)}`,
       san: move.san,
       uci: `${move.from}${move.to}${move.promotion ?? ""}`,
       comment: frame.pendingComment,
+      nags,
       fenBefore,
       fenAfter: frame.chess.fen(),
       children: []
@@ -699,7 +737,7 @@ function parseOpeningPgn(pgn: string): OpeningLine | null {
     frame.nodes = node.children;
   }
 
-  return root.length > 0 ? { id: stableOpeningId(name, root), name, importedAt: new Date().toISOString(), root } : null;
+  return root.length > 0 ? { id: forcedId ?? stableOpeningId(name, root), name, variation, importedAt: new Date().toISOString(), source, root } : null;
 }
 
 function makeFrame(nodes: OpeningNode[], chess: Chess) {
@@ -725,6 +763,11 @@ function isPgnNoise(token: string): boolean {
   return /^\d+\.(\.\.)?$/.test(token) || /^\$\d+$/.test(token) || /^(1-0|0-1|1\/2-1\/2|\*)$/.test(token);
 }
 
+function extractNags(token: string): string[] {
+  const suffix = token.match(/([!?]+)(?:[+#]+)?$/)?.[1];
+  return suffix ? [suffix] : [];
+}
+
 function joinComment(existing: string, next: string): string {
   if (!existing) return next;
   if (!next) return existing;
@@ -733,6 +776,21 @@ function joinComment(existing: string, next: string): string {
 
 function stableOpeningId(name: string, root: OpeningNode[]): string {
   return `${name}-${root.map((node) => node.uci).join("-")}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 96);
+}
+
+function mergeOpeningLines(bundled: OpeningLine[], local: OpeningLine[]): OpeningLine[] {
+  const seen = new Set<string>();
+  const merged: OpeningLine[] = [];
+  for (const line of [...bundled, ...local]) {
+    if (seen.has(line.id)) continue;
+    seen.add(line.id);
+    merged.push(line);
+  }
+  return merged;
+}
+
+function isBundledOpening(line: OpeningLine): boolean {
+  return Boolean(line.source?.startsWith("/data/openings/"));
 }
 
 function findOpeningOptions(line: OpeningLine | null, path: string[]): OpeningNode[] {

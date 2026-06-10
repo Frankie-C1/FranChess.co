@@ -1,0 +1,34 @@
+[Event "FranChess Opening Trainer"]
+[Opening "Caro-Kann Defense"]
+[Variation "Classical Development"]
+[Result "*"]
+
+1. e4 {Weiß kontrolliert das Zentrum.}
+1... c6 {Bereitet d5 vor.}
+
+2. d4 {Mehr Raum im Zentrum.}
+2... d5 {Direkter Gegenangriff auf das Zentrum.}
+
+3. Nc3 {Entwicklung und Unterstützung von e4.}
+3... dxe4 {Schwarz tauscht den Zentralbauern.}
+
+4. Nxe4 {Natürliche Rücknahme.}
+4... Bf5 {Der Läufer kommt vor die Bauernkette.}
+
+5. Ng3 {Greift den Läufer an.}
+5... Bg6 {Läufer bleibt aktiv.}
+
+6. h4 {Raumgewinn am Königsflügel.}
+6... h6 {Verhindert h5 mit Tempo.}
+
+7. Nf3 {Normale Entwicklung.}
+7... Nd7 {Unterstützt e5 und entwickelt sich.}
+
+8. h5 {Vertreibt den Läufer weiter.}
+8... Bh7
+
+9. Bd3 {Entwicklung und Druck.}
+9... Bxd3
+
+10. Qxd3 {Weiße Dame entwickelt sich aktiv.}
+*

@@ -1,0 +1,10 @@
+[
+  {
+    "id": "italian-game",
+    "path": "/data/openings/italian_game.pgn"
+  },
+  {
+    "id": "caro-kann-defense",
+    "path": "/data/openings/caro_kann_defense.pgn"
+  }
+]
