@@ -147,6 +147,7 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   const [showSolution, setShowSolution] = useState(false);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [boardVersion, setBoardVersion] = useState(0);
+  const [solvedOverlay, setSolvedOverlay] = useState(false);
   const board = useResponsiveBoardWidth(420);
   const orientation = game.turn() === "b" ? "black" : "white";
   const boardColors = useMemo(
@@ -211,6 +212,7 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
       setSolutionIndex(1);
       setStatus("idle");
       setShowSolution(false);
+      setSolvedOverlay(false);
       setSelectedSquare(null);
       setBoardVersion((value) => value + 1);
       setMessage("Finde den nächsten Zug der Lösung.");
@@ -221,7 +223,7 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   }
 
   function onPuzzleDrop(from: Square, to: Square) {
-    if (!activePuzzle) return false;
+    if (!activePuzzle || solvedOverlay) return false;
     const expected = activePuzzle.moves[solutionIndex];
     const played = `${from}${to}`;
     const promotion = expected?.[4] ?? "q";
@@ -265,10 +267,22 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
     const solved = nextIndex >= activePuzzle.moves.length;
     setStatus(solved ? "solved" : "correct");
     setMessage(solved ? "Gelöst." : "Richtig. Nächster Zug.");
+    if (solved) {
+      setSolvedOverlay(true);
+      window.setTimeout(() => {
+        setSolvedOverlay(false);
+        if (filtered.length <= 1) {
+          setMessage("Keine weiteren Puzzles.");
+          return;
+        }
+        setActiveIndex((value) => (value + 1) % filtered.length);
+      }, 1500);
+    }
     return true;
   }
 
   function onPuzzleSquareClick(square: Square) {
+    if (solvedOverlay) return;
     if (selectedSquare) {
       const targetColor = pieceColorAt(game.fen(), square);
       const selectedColor = pieceColorAt(game.fen(), selectedSquare);
@@ -295,21 +309,31 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   return (
     <section className="grid gap-5 lg:grid-cols-[minmax(320px,460px)_1fr]">
       <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
-        <Chessboard
-          key={`puzzle-${boardVersion}`}
-          id="franchess-puzzle"
-          position={game.fen()}
-          boardWidth={board.width}
-          boardOrientation={orientation}
-          onPieceDrop={(from, to) => onPuzzleDrop(from as Square, to as Square)}
-          onSquareClick={(square) => onPuzzleSquareClick(square as Square)}
-          isDraggablePiece={({ sourceSquare }) => pieceColorAt(game.fen(), sourceSquare as Square) === game.turn()}
-          customSquareStyles={squareStyles}
-          customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
-          customLightSquareStyle={{ backgroundColor: boardColors.light }}
-          animationDuration={160}
-          autoPromoteToQueen
-        />
+        <div className="board-touch-area relative flex justify-center overflow-hidden">
+          <Chessboard
+            key={`puzzle-${boardVersion}`}
+            id="franchess-puzzle"
+            position={game.fen()}
+            boardWidth={board.width}
+            boardOrientation={orientation}
+            onPieceDrop={(from, to) => onPuzzleDrop(from as Square, to as Square)}
+            onSquareClick={(square) => onPuzzleSquareClick(square as Square)}
+            isDraggablePiece={({ sourceSquare }) => !solvedOverlay && pieceColorAt(game.fen(), sourceSquare as Square) === game.turn()}
+            customSquareStyles={squareStyles}
+            customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+            customLightSquareStyle={{ backgroundColor: boardColors.light }}
+            animationDuration={160}
+            autoPromoteToQueen
+          />
+          {solvedOverlay && (
+            <div className="absolute inset-0 grid place-items-center rounded-md bg-[var(--color-surface)]/85 backdrop-blur-sm">
+              <div className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3 text-lg font-semibold text-[var(--color-text)] shadow-lg">
+                <CheckCircle2 size={22} className="text-[var(--color-accent)]" />
+                Gelöst
+              </div>
+            </div>
+          )}
+        </div>
       </div>
       <div className="grid content-start gap-4">
         <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
@@ -367,8 +391,11 @@ function OpeningTrainer({ settings }: { settings: AppSettings }) {
   const [status, setStatus] = useState<"idle" | "correct" | "wrong" | "solved">("idle");
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [boardVersion, setBoardVersion] = useState(0);
+  const [showOpeningHint, setShowOpeningHint] = useState(false);
+  const [showOpeningMove, setShowOpeningMove] = useState(false);
   const board = useResponsiveBoardWidth(420);
-  const orientation = game.turn() === "b" ? "black" : "white";
+  const openingPlayerColor = activeLine ? inferOpeningPlayerColor(activeLine) : "w";
+  const orientation = openingPlayerColor === "b" ? "black" : "white";
   const boardColors = useMemo(
     () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
     [settings.boardTheme, settings.colorTheme, settings.darkMode]
@@ -454,15 +481,19 @@ function OpeningTrainer({ settings }: { settings: AppSettings }) {
 
   function startLine(line: OpeningLine, resumePath: string[] = []) {
     const resumed = positionFromPath(line, resumePath);
+    const playerColor = inferOpeningPlayerColor(line);
+    const prepared = autoPlayOpeningOpponent(line, resumed.chess, resumed.path, playerColor);
     setActiveLine(line);
-      setGame(resumed.chess);
-      setPath(resumed.path);
+      setGame(prepared.chess);
+      setPath(prepared.path);
       setTargetNodeId(null);
       setSelectedSquare(null);
+      setShowOpeningHint(false);
+      setShowOpeningMove(false);
       setBoardVersion((value) => value + 1);
       setStatus("idle");
-      const options = findOpeningOptions(line, resumed.path);
-    setMessage(options[0]?.comment || (resumed.path.length ? "Fortschritt geladen. Finde den nächsten Zug." : "Finde den nächsten Zug der Linie."));
+      const options = findOpeningOptions(line, prepared.path);
+    setMessage(options.length ? "Finde den nächsten Repertoirezug." : "Linie abgeschlossen.");
   }
 
   function resetLine() {
@@ -472,7 +503,7 @@ function OpeningTrainer({ settings }: { settings: AppSettings }) {
   }
 
   function onOpeningDrop(from: Square, to: Square) {
-    if (!activeLine || !targetNode) return false;
+    if (!activeLine || !targetNode || game.turn() !== openingPlayerColor) return false;
     const next = new Chess(game.fen());
     let move = null;
     try {
@@ -488,15 +519,18 @@ function OpeningTrainer({ settings }: { settings: AppSettings }) {
       return false;
     }
     const nextPath = [...path, targetNode.id];
-    setGame(next);
+    const prepared = autoPlayOpeningOpponent(activeLine, next, nextPath, openingPlayerColor);
+    setGame(prepared.chess);
     setSelectedSquare(null);
-    setPath(nextPath);
-    saveOpeningProgress(activeLine.id, nextPath);
-    const nextOptions = targetNode.children;
+    setPath(prepared.path);
+    saveOpeningProgress(activeLine.id, prepared.path);
+    const nextOptions = findOpeningOptions(activeLine, prepared.path);
     setTargetNodeId(nextOptions[0]?.id ?? null);
     const solved = nextOptions.length === 0;
     setStatus(solved ? "solved" : "correct");
-    setMessage(targetNode.comment || (solved ? "Linie abgeschlossen." : "Richtig. Weiter."));
+    setShowOpeningHint(false);
+    setShowOpeningMove(false);
+    setMessage(solved ? "Linie abgeschlossen." : "Richtig. Gegnerzug wurde automatisch gespielt.");
     return true;
   }
 
@@ -504,7 +538,7 @@ function OpeningTrainer({ settings }: { settings: AppSettings }) {
     if (selectedSquare) {
       const targetColor = pieceColorAt(game.fen(), square);
       const selectedColor = pieceColorAt(game.fen(), selectedSquare);
-      if (targetColor && targetColor === selectedColor && targetColor === game.turn()) {
+      if (targetColor && targetColor === selectedColor && targetColor === openingPlayerColor && game.turn() === openingPlayerColor) {
         setSelectedSquare(square);
         return;
       }
@@ -512,27 +546,29 @@ function OpeningTrainer({ settings }: { settings: AppSettings }) {
       setSelectedSquare(null);
       return;
     }
-    setSelectedSquare(pieceColorAt(game.fen(), square) === game.turn() ? square : null);
+    setSelectedSquare(pieceColorAt(game.fen(), square) === openingPlayerColor && game.turn() === openingPlayerColor ? square : null);
   }
 
   return (
     <section className="grid gap-5 lg:grid-cols-[minmax(320px,460px)_1fr]">
       <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
-        <Chessboard
-          key={`opening-${boardVersion}`}
-          id="franchess-openings"
-          position={game.fen()}
-          boardWidth={board.width}
-          boardOrientation={orientation}
-          onPieceDrop={(from, to) => onOpeningDrop(from as Square, to as Square)}
-          onSquareClick={(square) => onOpeningSquareClick(square as Square)}
-          isDraggablePiece={({ sourceSquare }) => pieceColorAt(game.fen(), sourceSquare as Square) === game.turn()}
-          customSquareStyles={squareStyles}
-          customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
-          customLightSquareStyle={{ backgroundColor: boardColors.light }}
-          animationDuration={160}
-          autoPromoteToQueen
-        />
+        <div className="board-touch-area flex justify-center overflow-hidden">
+          <Chessboard
+            key={`opening-${boardVersion}`}
+            id="franchess-openings"
+            position={game.fen()}
+            boardWidth={board.width}
+            boardOrientation={orientation}
+            onPieceDrop={(from, to) => onOpeningDrop(from as Square, to as Square)}
+            onSquareClick={(square) => onOpeningSquareClick(square as Square)}
+            isDraggablePiece={({ sourceSquare }) => pieceColorAt(game.fen(), sourceSquare as Square) === openingPlayerColor && game.turn() === openingPlayerColor}
+            customSquareStyles={squareStyles}
+            customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+            customLightSquareStyle={{ backgroundColor: boardColors.light }}
+            animationDuration={160}
+            autoPromoteToQueen
+          />
+        </div>
       </div>
       <div className="grid content-start gap-4">
         <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
@@ -570,14 +606,33 @@ function OpeningTrainer({ settings }: { settings: AppSettings }) {
                 {activeLine.name}{activeLine.variation ? ` - ${activeLine.variation}` : ""} - Fortschritt {path.length}/{countMainDepth(activeLine.root)}
               </p>
               {targetNode && (
-                <p className="mt-2 text-sm">
-                  Nächster Zielzug: <span className="font-semibold">{targetNode.san}</span>
-                </p>
+                <div className="mt-3 grid gap-2 rounded-md bg-[var(--color-surface-2)] p-3 text-sm">
+                  <p className="text-[var(--color-muted)]">
+                    {openingPlayerColor === "w" ? "Du trainierst Weiß." : "Du trainierst Schwarz."} Der nächste Zug wird erst auf Wunsch angezeigt.
+                  </p>
+                  {showOpeningHint && targetNode.comment && <p>{targetNode.comment}</p>}
+                  {showOpeningMove && <p>Zug: <span className="font-semibold">{targetNode.san}</span></p>}
+                </div>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
+                <ActionButton variant="quiet" onClick={() => setShowOpeningHint(true)}>Hinweis anzeigen</ActionButton>
+                <ActionButton variant="quiet" onClick={() => setShowOpeningMove(true)}>Zug anzeigen</ActionButton>
+                {currentOptions.length > 1 && (
+                  <ActionButton
+                    variant="quiet"
+                    onClick={() => {
+                      const index = Math.max(0, currentOptions.findIndex((option) => option.id === targetNode?.id));
+                      setTargetNodeId(currentOptions[(index + 1) % currentOptions.length]?.id ?? null);
+                      setShowOpeningHint(false);
+                      setShowOpeningMove(false);
+                    }}
+                  >
+                    Nächste Variante
+                  </ActionButton>
+                )}
                 <ActionButton variant="quiet" onClick={resetLine}>Neu starten</ActionButton>
               </div>
-              <div className="mt-4">
+              <div className="mt-4 hidden">
                 <h3 className="mb-2 text-sm font-semibold">Variantenbaum</h3>
                 <OpeningTree nodes={activeLine.root} currentOptions={currentOptions} targetNodeId={targetNode?.id ?? null} onSelectTarget={setTargetNodeId} />
               </div>
@@ -879,6 +934,33 @@ function findOpeningOptions(line: OpeningLine | null, path: string[]): OpeningNo
     options = next.children;
   }
   return options;
+}
+
+function inferOpeningPlayerColor(line: OpeningLine): "w" | "b" {
+  const text = `${line.name} ${line.variation ?? ""}`.toLowerCase();
+  if (text.includes("schwarz") || text.includes("black") || text.includes("caro") || text.includes("sicilian") || text.includes("defense")) return "b";
+  return "w";
+}
+
+function autoPlayOpeningOpponent(
+  line: OpeningLine,
+  chess: Chess,
+  path: string[],
+  playerColor: "w" | "b"
+): { chess: Chess; path: string[] } {
+  const next = new Chess(chess.fen());
+  const nextPath = [...path];
+  let guard = 0;
+  while (next.turn() !== playerColor && guard < 8) {
+    const options = findOpeningOptions(line, nextPath);
+    const reply = options[0];
+    if (!reply) break;
+    const move = next.move({ from: reply.uci.slice(0, 2), to: reply.uci.slice(2, 4), promotion: reply.uci[4] || "q" });
+    if (!move) break;
+    nextPath.push(reply.id);
+    guard += 1;
+  }
+  return { chess: next, path: nextPath };
 }
 
 function positionFromPath(line: OpeningLine, savedPath: string[]): { chess: Chess; path: string[] } {

@@ -240,14 +240,14 @@ export function PlayPage({
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(430px,570px)_minmax(300px,1fr)]">
       <section className="grid gap-3">
-        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm font-medium text-[var(--color-text)] md:hidden">
+        <div className="hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm font-medium text-[var(--color-text)]">
           {isThinking ? "Coach denkt ..." : coachNote}
           {!atLatest && <p className="mt-1 text-xs text-[var(--color-muted)]">Du bist in einer früheren Stellung. Ein neuer Zug startet ab hier eine neue Linie.</p>}
         </div>
         <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <div className="grid grid-cols-[30px_minmax(0,1fr)_48px] gap-3 sm:grid-cols-[36px_minmax(0,1fr)_64px]">
+          <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 md:grid-cols-[36px_minmax(0,1fr)_48px]">
             <EvaluationBar cp={current.cp} mate={current.mate} />
-            <div className="flex justify-center overflow-hidden">
+            <div className="board-touch-area flex justify-center overflow-hidden">
               <Chessboard
                 key={`coach-${boardVersion}`}
                 id="franchess-play"
@@ -266,7 +266,12 @@ export function PlayPage({
                 customLightSquareStyle={{ backgroundColor: boardColors.light }}
               />
             </div>
-            <CapturedMaterialDisplay fen={position} orientation={orientation} layout="side" />
+            <div className="hidden md:block">
+              <CapturedMaterialDisplay fen={position} orientation={orientation} layout="side" />
+            </div>
+          </div>
+          <div className="mt-3 md:hidden">
+            <CapturedMaterialDisplay fen={position} orientation={orientation} />
           </div>
           <div className="md:hidden">
             <BoardControls current={currentPly} max={history.length - 1} onChange={setCurrentPly} />

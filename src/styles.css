@@ -60,6 +60,8 @@ html {
   --color-bg: #080706;
   --color-surface: #16130d;
   --color-surface-2: #241f14;
+  --color-text: #f6f1e7;
+  --color-muted: #c9bea8;
   --color-border: #4c4228;
   --color-accent: #d6a934;
   --color-accent-2: #b88700;
@@ -82,6 +84,8 @@ html {
   --color-bg: #08070d;
   --color-surface: #171421;
   --color-surface-2: #221c33;
+  --color-text: #f4f0ff;
+  --color-muted: #c3b8d8;
   --color-border: #453a64;
   --color-accent: #a78bfa;
   --color-accent-2: #8b5cf6;
@@ -255,6 +259,12 @@ img,
 svg,
 canvas {
   max-width: 100%;
+}
+
+.board-touch-area {
+  touch-action: none;
+  overscroll-behavior: contain;
+  contain: layout paint;
 }
 
 @supports (min-height: 100dvh) {

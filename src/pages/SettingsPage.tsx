@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Columns3, Database, Moon, Move, Palette, Search, Sparkles, Star, Trash2 } from "lucide-react";
+import { filterGamesByPlayer, sortGamesByDate, type GameSortOrder } from "../lib/chess/gameList";
 import type { AppSettings, BoardTheme, ColorTheme, EngineElo, LayoutMode, StoredGame } from "../types";
 
 const engineEloOptions: EngineElo[] = [800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, "max"];
@@ -48,6 +49,9 @@ export function SettingsPage({
   const favorites = games.filter((game) => game.favorite);
   const [playerToDelete, setPlayerToDelete] = useState("");
   const [dataMessage, setDataMessage] = useState("");
+  const [favoriteSearch, setFavoriteSearch] = useState("");
+  const [favoriteSortOrder, setFavoriteSortOrder] = useState<GameSortOrder>("desc");
+  const visibleFavorites = filterGamesByPlayer(sortGamesByDate(favorites, favoriteSortOrder), favoriteSearch);
   const analyzedCount = games.filter((game) => game.analysis.length > 0).length;
 
   function update(next: Partial<AppSettings>) {
@@ -193,11 +197,28 @@ export function SettingsPage({
           </span>
           <h1 className="text-lg font-semibold">Favoriten</h1>
         </div>
+        {favorites.length > 0 && (
+          <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input
+              value={favoriteSearch}
+              onChange={(event) => setFavoriteSearch(event.target.value)}
+              className="h-10 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
+              placeholder="Spieler suchen"
+            />
+            <button
+              type="button"
+              onClick={() => setFavoriteSortOrder((value) => (value === "desc" ? "asc" : "desc"))}
+              className="h-10 rounded-md border border-[var(--color-border)] px-3 text-sm hover:bg-[var(--color-surface-2)]"
+            >
+              Datum {favoriteSortOrder === "desc" ? "absteigend" : "aufsteigend"}
+            </button>
+          </div>
+        )}
         {favorites.length === 0 ? (
           <p className="text-sm text-[var(--color-muted)]">Noch keine favorisierten Partien.</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
-            {favorites.map((game) => (
+            {visibleFavorites.map((game) => (
               <article key={game.id} className="rounded-md border border-[var(--color-border)] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <button type="button" className="min-w-0 text-left" onClick={() => onOpenGame(game.id)}>

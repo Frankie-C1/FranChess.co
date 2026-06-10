@@ -15,7 +15,7 @@ export function CapturedMaterialDisplay({
 
   if (layout === "side") {
     return (
-      <div className="flex h-full min-h-[160px] w-12 flex-col justify-between gap-2 sm:w-16">
+      <div className="flex h-full min-h-[160px] w-10 flex-col justify-between gap-2 sm:w-12">
         <MaterialRow pieces={top.captured} advantage={top.advantage} align="start" vertical />
         <MaterialRow pieces={bottom.captured} advantage={bottom.advantage} align="end" vertical />
       </div>
@@ -47,7 +47,7 @@ function MaterialRow({
         vertical ? "min-h-[44%] flex-col items-center justify-center" : `items-center ${align === "end" ? "justify-end" : "justify-start"}`
       }`}
     >
-      <span className={`${vertical ? "whitespace-pre-line text-center" : "min-w-0 truncate"} text-lg leading-none text-stone-400 dark:text-stone-500`}>
+      <span className={`${vertical ? "whitespace-pre-line text-center" : "min-w-0 truncate"} text-base leading-none text-stone-400 dark:text-stone-500`}>
         {pieces.join(vertical ? "\n" : " ") || "·"}
       </span>
       <span className="text-xs font-semibold text-[var(--color-muted)]">{advantage > 0 ? `+${advantage}` : ""}</span>

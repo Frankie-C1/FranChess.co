@@ -11,6 +11,7 @@ import {
   type ChessComProgress,
   type ChessComTimeClass
 } from "../lib/chesscom/client";
+import { filterGamesByPlayer, sortGamesByDate, type GameSortOrder } from "../lib/chess/gameList";
 import { loadProfile, saveProfile } from "../lib/storage/profile";
 import type { StoredGame } from "../types";
 
@@ -31,6 +32,9 @@ export function UploadPage({
   const [period, setPeriod] = useState<ChessComPeriod>("last-month");
   const [progress, setProgress] = useState<ChessComProgress>({ phase: "idle", message: "" });
   const [isImporting, setIsImporting] = useState(false);
+  const [sortOrder, setSortOrder] = useState<GameSortOrder>("desc");
+  const [playerSearch, setPlayerSearch] = useState("");
+  const visibleGames = filterGamesByPlayer(sortGamesByDate(games, sortOrder), playerSearch);
 
   useEffect(() => {
     setChessComUsername(loadProfile().chessComUsername ?? "");
@@ -165,10 +169,25 @@ export function UploadPage({
       <section className="rounded-md border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-semibold">Importierte Partien</h2>
-          <span className="text-sm text-stone-500">{games.length}</span>
+          <span className="text-sm text-stone-500">{visibleGames.length}/{games.length}</span>
+        </div>
+        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+          <input
+            value={playerSearch}
+            onChange={(event) => setPlayerSearch(event.target.value)}
+            className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm dark:border-stone-700 dark:bg-stone-950"
+            placeholder="Spieler suchen"
+          />
+          <button
+            type="button"
+            onClick={() => setSortOrder((value) => (value === "desc" ? "asc" : "desc"))}
+            className="h-10 rounded-md border border-stone-300 px-3 text-sm hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800"
+          >
+            Datum {sortOrder === "desc" ? "absteigend" : "aufsteigend"}
+          </button>
         </div>
         <div className="grid gap-3">
-          {games.map((game) => (
+          {visibleGames.map((game) => (
             <article key={game.id} className="rounded-md border border-stone-200 p-4 transition hover:border-[#5f8f45] hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-950">
               <div className="flex items-start gap-3">
                 <button

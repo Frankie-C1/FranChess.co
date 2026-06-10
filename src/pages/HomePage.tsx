@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ActionButton } from "../components/ActionButton";
 import { StatCard } from "../components/StatCard";
 import { buildCoachProfile } from "../lib/analysis/profile";
+import { sortGamesByDate } from "../lib/chess/gameList";
 import type { CoachView, StoredGame } from "../types";
 
 export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) => void; games: StoredGame[] }) {
@@ -10,7 +11,7 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
   const favorites = games.filter((game) => game.favorite);
   const profile = buildCoachProfile(games);
   const lastImported = [...games].sort((a, b) => b.importedAt.localeCompare(a.importedAt))[0] ?? null;
-  const recentGames = [...games].sort((a, b) => b.importedAt.localeCompare(a.importedAt)).slice(0, 4);
+  const recentGames = sortGamesByDate(games, "desc").slice(0, 4);
   const topCategory = profile.topCategories[0];
 
   return (

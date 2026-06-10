@@ -119,7 +119,7 @@ export function Layout({ nav, view, onNavigate, layoutMode, utility, children }:
         </div>
       </div>
 
-      <nav className={`fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+10px)] z-50 rounded-[26px] border border-[var(--color-border)] bg-[var(--color-surface)]/98 px-3 pb-2 pt-2 shadow-[0_12px_32px_rgba(0,0,0,0.20)] backdrop-blur ${bottomHidden}`}>
+      <nav className={`fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+6px)] z-50 rounded-[26px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 pb-2 pt-2 shadow-[0_12px_32px_rgba(0,0,0,0.20)] backdrop-blur ${bottomHidden}`}>
         <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
           <MobileNavButton nav={nav} id="viewer" view={view} onNavigate={navigate} />
           <MobileNavButton nav={nav} id="dashboard" view={view} onNavigate={navigate} label="Übersicht" />

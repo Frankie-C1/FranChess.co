@@ -15,6 +15,7 @@ import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
 import { analyzeGame } from "../lib/analysis/analyzeGame";
 import { judgeMove } from "../lib/analysis/moveJudgement";
 import { boardColorsFor, buildSquareStyles, candidatesToArrows, canSelectPiece, formatEval, pieceColorAt, tryMove } from "../lib/chess/boardUi";
+import { filterGamesByPlayer, sortGamesByDate, type GameSortOrder } from "../lib/chess/gameList";
 import { engineUnavailableMessage, stockfishService } from "../lib/stockfish/StockfishService";
 import type { AnalysisDepth, AppSettings, ChessColor, EngineCandidateMove, MoveAnalysis, StoredGame } from "../types";
 
@@ -49,6 +50,8 @@ export function ViewerPage({
   const [suggestionError, setSuggestionError] = useState("");
   const [boardVersion, setBoardVersion] = useState(0);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [sortOrder, setSortOrder] = useState<GameSortOrder>("desc");
+  const [playerSearch, setPlayerSearch] = useState("");
   const board = useResponsiveBoardWidth(panelCollapsed ? 620 : 500);
   const boardColors = useMemo(
     () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
@@ -75,6 +78,11 @@ export function ViewerPage({
     [position, selectedSquare, settings.showLegalMoves]
   );
   const arrows = useMemo(() => candidatesToArrows(suggestions), [suggestions]);
+  const listedGames = useMemo(() => {
+    const filtered = filterGamesByPlayer(sortGamesByDate(games, sortOrder), playerSearch);
+    if (!selectedGame || filtered.some((game) => game.id === selectedGame.id)) return filtered;
+    return [selectedGame, ...filtered];
+  }, [games, playerSearch, selectedGame, sortOrder]);
 
   useKeyboardNavigation({ enabled: true, current: activePly, max: maxPly, onChange: setPly });
 
@@ -187,6 +195,21 @@ export function ViewerPage({
               {panelCollapsed ? "Panel anzeigen" : "Panel einklappen"}
             </ActionButton>
           </div>
+          <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input
+              value={playerSearch}
+              onChange={(event) => setPlayerSearch(event.target.value)}
+              className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm dark:border-stone-700 dark:bg-stone-950"
+              placeholder="Spieler suchen"
+            />
+            <button
+              type="button"
+              onClick={() => setSortOrder((value) => (value === "desc" ? "asc" : "desc"))}
+              className="h-10 rounded-md border border-stone-300 px-3 text-sm hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800"
+            >
+              Datum {sortOrder === "desc" ? "absteigend" : "aufsteigend"}
+            </button>
+          </div>
           <select
             value={selectedGame.id}
             onChange={(event) => {
@@ -195,7 +218,7 @@ export function ViewerPage({
             }}
             className="h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm dark:border-stone-700 dark:bg-stone-950"
           >
-            {games.map((game) => (
+            {listedGames.map((game) => (
               <option key={game.id} value={game.id}>
                 {game.favorite ? "★ " : ""}{game.metadata.white} - {game.metadata.black} ({game.metadata.result})
               </option>
@@ -204,9 +227,9 @@ export function ViewerPage({
         </div>
 
         <div ref={board.ref} className="rounded-md border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-          <div className="grid grid-cols-[30px_minmax(0,1fr)_48px] gap-3 sm:grid-cols-[36px_minmax(0,1fr)_64px]">
+          <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 md:grid-cols-[36px_minmax(0,1fr)_48px]">
             <EvaluationBar cp={currentEval.cp} mate={currentEval.mate} />
-            <div className="flex justify-center overflow-hidden">
+            <div className="board-touch-area flex justify-center overflow-hidden">
               <Chessboard
                 key={`viewer-${boardVersion}`}
                 id="franchess-viewer"
@@ -224,7 +247,12 @@ export function ViewerPage({
                 customLightSquareStyle={{ backgroundColor: boardColors.light }}
               />
             </div>
-            <CapturedMaterialDisplay fen={position} orientation="white" layout="side" />
+            <div className="hidden md:block">
+              <CapturedMaterialDisplay fen={position} orientation="white" layout="side" />
+            </div>
+          </div>
+          <div className="mt-3 md:hidden">
+            <CapturedMaterialDisplay fen={position} orientation="white" />
           </div>
           <div className="md:hidden">
             <BoardControls current={activePly} max={maxPly} onChange={setPly} />
