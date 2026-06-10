@@ -2,10 +2,14 @@ import { createReadStream, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
 
+const sourceUrl = "https://database.lichess.org/#puzzles";
+const license = "Creative Commons CC0";
 const [, , inputArg, outputArg = "public/data/puzzles.json", limitArg = "1000"] = process.argv;
 
 if (!inputArg) {
   console.error("Usage: node scripts/import-lichess-puzzles.mjs path/to/lichess_db_puzzle.csv public/data/puzzles.json 1000");
+  console.error(`Source: ${sourceUrl}`);
+  console.error(`License: ${license}`);
   process.exit(1);
 }
 
@@ -51,8 +55,13 @@ for await (const line of reader) {
 }
 
 mkdirSync(dirname(output), { recursive: true });
-writeFileSync(output, JSON.stringify(rows, null, 2));
+writeFileSync(
+  output,
+  `${JSON.stringify(rows, null, 2)}\n`
+);
 console.log(`Wrote ${rows.length} puzzles to ${output}`);
+console.log(`Source: ${sourceUrl}`);
+console.log(`License: ${license}`);
 
 function splitCsv(line) {
   const cells = [];
