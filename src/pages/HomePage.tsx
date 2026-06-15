@@ -1,7 +1,6 @@
-import { BarChart3, Brain, Eye, Play, Star, Upload } from "lucide-react";
+import { ArrowRight, BarChart3, Brain, Eye, Gamepad2, Play, Sparkles, Star, Upload } from "lucide-react";
 import type { ReactNode } from "react";
 import { ActionButton } from "../components/ActionButton";
-import { StatCard } from "../components/StatCard";
 import { buildCoachProfile } from "../lib/analysis/profile";
 import { sortGamesByDate } from "../lib/chess/gameList";
 import type { CoachView, StoredGame } from "../types";
@@ -10,86 +9,62 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
   const analyzedGames = games.filter((game) => game.analysis.length > 0);
   const favorites = games.filter((game) => game.favorite);
   const profile = buildCoachProfile(games);
-  const lastImported = [...games].sort((a, b) => b.importedAt.localeCompare(a.importedAt))[0] ?? null;
   const recentGames = sortGamesByDate(games, "desc").slice(0, 4);
   const topCategory = profile.topCategories[0];
 
   return (
-    <div className="grid gap-6">
-      <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-sm font-medium text-[var(--color-muted)]">Trainer-Zentrale</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Willkommen zurück.</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-muted)]">
-              Wähle eine Partie, starte den Coach oder arbeite direkt an den Mustern, die deine Analysen zeigen.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <ActionButton onClick={() => onNavigate("play")} icon={<Play size={17} />}>Coach starten</ActionButton>
-            <ActionButton variant="quiet" onClick={() => onNavigate("upload")} icon={<Upload size={17} />}>Import</ActionButton>
-          </div>
+    <div className="home-dashboard">
+      <section className="dashboard-welcome premium-panel">
+        <div>
+          <p className="eyebrow">Dein Chess Studio</p>
+          <h1>Willkommen zurück.</h1>
+          <p>Importiere Partien, erkenne Muster und arbeite mit einem klaren Trainingsplan an deinem nächsten Niveau.</p>
+        </div>
+        <div className="welcome-actions">
+          <ActionButton onClick={() => onNavigate("play")} icon={<Play size={17} />}>Coach starten</ActionButton>
+          <ActionButton variant="quiet" onClick={() => onNavigate("upload")} icon={<Upload size={17} />}>Partie importieren</ActionButton>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Importierte Partien" value={games.length} />
-        <StatCard label="Analysierte Partien" value={analyzedGames.length} />
-        <StatCard label="Favoriten" value={favorites.length} />
-        <StatCard label="Letzter Import" value={lastImported ? shortDate(lastImported.importedAt) : "-"} />
-        <StatCard label="Durchschnittlicher CPL" value={profile.averageCentipawnLoss ? Math.round(profile.averageCentipawnLoss) : "-"} />
+      <section className="feature-card-grid">
+        <FeatureCard icon={<Gamepad2 />} title="Online spielen" text="Fordere ein echtes FranChess-Profil heraus." action="Lobby öffnen" onClick={() => onNavigate("online")} tone="accent" />
+        <FeatureCard icon={<Brain />} title="Training" text="Puzzles, eigene Fehler und Eröffnungen trainieren." action="Training starten" onClick={() => onNavigate("training")} />
+        <FeatureCard icon={<Eye />} title="Game Review" text="Stockfish-Analyse mit Zugdetails und Coach-Hinweisen." action="Analyse öffnen" onClick={() => onNavigate("viewer")} />
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Zuletzt importiert</h2>
-            <ActionButton variant="quiet" onClick={() => onNavigate("viewer")} icon={<Eye size={16} />}>Analyse öffnen</ActionButton>
-          </div>
-          {recentGames.length === 0 ? (
-            <p className="rounded-md bg-[var(--color-surface-2)] p-4 text-sm text-[var(--color-muted)]">
-              Noch keine Partien gespeichert. Importiere ein PGN oder lade Partien über Chess.com.
-            </p>
-          ) : (
-            <div className="grid gap-3">
+      <section className="dashboard-metrics">
+        <Metric label="Partien" value={games.length} detail={`${analyzedGames.length} analysiert`} />
+        <Metric label="Favoriten" value={favorites.length} detail="markierte Reviews" />
+        <Metric label="Average CPL" value={profile.averageCentipawnLoss ? Math.round(profile.averageCentipawnLoss) : "–"} detail="über analysierte Züge" />
+        <Metric label="Trainingsfelder" value={profile.topCategories.length} detail="erkannte Muster" />
+      </section>
+
+      <div className="dashboard-lower-grid">
+        <section className="recent-panel premium-panel">
+          <div className="section-heading"><div><p className="eyebrow">Bibliothek</p><h2>Letzte Partien</h2></div><button type="button" onClick={() => onNavigate("upload")}>Alle ansehen <ArrowRight size={15} /></button></div>
+          {recentGames.length ? (
+            <div className="recent-game-list">
               {recentGames.map((game) => (
-                <article key={game.id} className="rounded-md border border-[var(--color-border)] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        {game.metadata.white} gegen {game.metadata.black}
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--color-muted)]">
-                        {game.metadata.result} - {game.metadata.date || "ohne Datum"} - {game.analysis.length > 0 ? "analysiert" : "nicht analysiert"}
-                      </p>
-                    </div>
-                    {game.favorite && <Star size={18} className="shrink-0 text-[var(--color-accent)]" fill="currentColor" />}
-                  </div>
-                </article>
+                <button type="button" key={game.id} onClick={() => onNavigate("viewer")}>
+                  <span className="game-result-mark">{game.metadata.result}</span>
+                  <span className="game-names"><strong>{game.metadata.white} <i>vs</i> {game.metadata.black}</strong><small>{game.metadata.date || "Ohne Datum"} · {game.metadata.opening || "Eröffnung nicht im PGN"}</small></span>
+                  {game.favorite && <Star size={16} fill="currentColor" />}
+                  <ArrowRight size={16} />
+                </button>
               ))}
             </div>
-          )}
+          ) : <div className="dashboard-empty"><Upload size={23} /><p>Noch keine Partie gespeichert.</p><button type="button" onClick={() => onNavigate("upload")}>Ersten Import starten</button></div>}
         </section>
 
-        <section className="grid gap-4">
-          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-            <h2 className="text-lg font-semibold">Analyse-Fokus</h2>
-            <p className="mt-3 text-sm leading-6 text-[var(--color-muted)]">
-              {topCategory
-                ? `Häufigstes Muster: ${humanCategory(topCategory.category)} (${topCategory.count}x).`
-                : "Sobald analysierte Partien vorhanden sind, erscheint hier dein häufigstes Fehlermuster."}
-            </p>
-          </div>
-
-          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-            <h2 className="text-lg font-semibold">Schnellaktionen</h2>
-            <div className="mt-4 grid gap-2">
-              <QuickAction icon={<Play size={17} />} label="Coach starten" onClick={() => onNavigate("play")} />
-              <QuickAction icon={<Upload size={17} />} label="Partie importieren" onClick={() => onNavigate("upload")} />
-              <QuickAction icon={<Eye size={17} />} label="Analyse öffnen" onClick={() => onNavigate("viewer")} />
-              <QuickAction icon={<Brain size={17} />} label="Training öffnen" onClick={() => onNavigate("training")} />
-              <QuickAction icon={<BarChart3 size={17} />} label="Analyse-Dashboard" onClick={() => onNavigate("dashboard")} />
-            </div>
+        <section className="focus-panel premium-panel">
+          <div className="focus-icon"><Sparkles size={20} /></div>
+          <p className="eyebrow">Coach Fokus</p>
+          <h2>{topCategory ? humanCategory(topCategory.category) : "Dein Profil entsteht"}</h2>
+          <p>{topCategory ? `Dieses Muster kam in deinen Analysen ${topCategory.count}-mal vor. Starte eine fokussierte Session aus echten Stellungen.` : "Analysiere deine ersten Partien. FranChess baut daraus automatisch ein persönliches Fehler- und Trainingsprofil."}</p>
+          <ActionButton className="w-full" onClick={() => onNavigate(topCategory ? "training" : "upload")} icon={topCategory ? <Brain size={16} /> : <Upload size={16} />}>{topCategory ? "Fokus trainieren" : "Partien hinzufügen"}</ActionButton>
+          <div className="focus-links">
+            <button type="button" onClick={() => onNavigate("dashboard")}><BarChart3 size={16} /> Fortschritt</button>
+            <button type="button" onClick={() => onNavigate("play")}><Play size={16} /> Coach</button>
           </div>
         </section>
       </div>
@@ -97,34 +72,23 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
   );
 }
 
-function QuickAction({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-11 items-center gap-3 rounded-md border border-[var(--color-border)] px-3 text-left text-sm transition hover:bg-[var(--color-surface-2)]"
-    >
-      <span className="text-[var(--color-accent)]">{icon}</span>
-      {label}
-    </button>
-  );
+function FeatureCard({ icon, title, text, action, onClick, tone = "default" }: { icon: ReactNode; title: string; text: string; action: string; onClick: () => void; tone?: "default" | "accent" }) {
+  return <button type="button" className={`dashboard-feature premium-panel ${tone}`} onClick={onClick}><span className="feature-icon">{icon}</span><span><strong>{title}</strong><small>{text}</small></span><span className="feature-action">{action} <ArrowRight size={14} /></span></button>;
 }
 
-function shortDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
+  return <article className="dashboard-metric premium-panel"><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>;
 }
 
 function humanCategory(category: string): string {
   const labels: Record<string, string> = {
-    hanging_piece: "hängende Figuren",
-    undefended_piece: "ungedeckte Figuren",
+    hanging_piece: "Hängende Figuren",
+    undefended_piece: "Ungedeckte Figuren",
     king_safety: "Königssicherheit",
-    bad_development: "Entwicklung",
-    missed_mate: "verpasste Mattmotive",
-    tactical_blunder: "taktische Patzer",
-    exchange_blunder: "Abtauschfehler",
+    bad_development: "Entwicklung verbessern",
+    missed_mate: "Mattmotive erkennen",
+    tactical_blunder: "Taktische Patzer",
+    exchange_blunder: "Abtauschentscheidungen",
     pawn_structure_damage: "Bauernstruktur"
   };
   return labels[category] ?? category.replace(/_/g, " ");

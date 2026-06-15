@@ -15,3 +15,7 @@ export function loadProfile(): CoachUserProfile {
 export function saveProfile(profile: CoachUserProfile): void {
   window.localStorage.setItem(profileKey, JSON.stringify(profile));
 }
+
+export function clearProfile(): void {
+  window.localStorage.removeItem(profileKey);
+}

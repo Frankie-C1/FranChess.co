@@ -1,4 +1,4 @@
-export type CoachView = "home" | "upload" | "dashboard" | "viewer" | "play" | "training" | "export" | "settings";
+export type CoachView = "home" | "online" | "upload" | "dashboard" | "viewer" | "play" | "training" | "export" | "settings";
 
 export type AnalysisDepth = "quick" | "normal" | "deep";
 
@@ -173,8 +173,14 @@ export interface TrainingTask {
 }
 
 export interface CoachUserProfile {
+  id?: string;
+  username?: string;
   chessComUsername?: string;
+  createdAt?: string;
+  lastSeen?: string;
 }
+
+export type CloudSyncState = "online" | "syncing" | "offline" | "local" | "error";
 
 export interface StorageAdapter {
   loadGames(): Promise<StoredGame[]>;

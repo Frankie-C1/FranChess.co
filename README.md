@@ -15,6 +15,74 @@ Build:
 npm run build
 ```
 
+## Supabase Setup
+
+FranChess arbeitet local-first. Supabase erweitert die lokale Speicherung um Profil-Sync und Online-Partien; Import, Viewer, Coach, Training und Stockfish bleiben auch bei einem Cloud-Ausfall lokal nutzbar.
+
+1. Im Supabase SQL Editor die Migration [`supabase/migrations/202606150001_franchess_cloud.sql`](supabase/migrations/202606150001_franchess_cloud.sql) ausfuehren.
+2. Lokal eine `.env` oder `.env.local` anlegen. In Netlify dieselben Werte unter **Project configuration > Environment variables** eintragen.
+
+```env
+VITE_SUPABASE_URL=https://hxvhnxtcifhroisqdqsy.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_kTDseP3mKy1tTQwvXww8Ew_YiZpyJHq
+```
+
+Nur Project URL und Publishable/Anon Key gehoeren ins Frontend. Niemals PostgreSQL Connection URL, Datenbankpasswort oder Service Role Key in Vite-Variablen eintragen.
+
+Die Migration erstellt:
+
+- `profiles`
+- `user_settings`
+- `games`
+- `analyses`
+- `training_progress`
+- `puzzle_progress`
+- `opening_progress`
+- `online_games`
+
+`online_games` enthaelt zusaetzlich Realtime- und Uhrfelder (`created_by_profile_id`, Spielernamen, Restzeiten und `last_move_at`). Die Tabelle wird der Supabase-Realtime-Publication hinzugefuegt.
+
+## Login ohne Passwort
+
+Beim ersten Start fragt FranChess nur nach einem Benutzernamen. Idealerweise entspricht er dem Chess.com Username. Das Geraet speichert Profil-ID und Username lokal und meldet den Nutzer bei spaeteren Starts automatisch an.
+
+Wichtig: Das ist bewusst **kein sicherer Auth-Login**. Ein Benutzername ist nur ein einfacher Profil- und Sync-Schluessel. Wer denselben Namen kennt, kann dasselbe Profil oeffnen. Die RLS-Policies der Migration sind deshalb fuer `anon` permissiv und duerfen nicht mit einer geschuetzten Benutzerverwaltung verwechselt werden. Fuer private oder sensible Daten muss spaeter Supabase Auth ergaenzt werden.
+
+Wenn Supabase nicht konfiguriert oder nicht erreichbar ist, kann die App im lokalen Modus weiterverwendet werden. Der Cloud-Status wird in Navigation und Profil sichtbar angezeigt.
+
+## Cloud Sync
+
+Synchronisiert werden:
+
+- Einstellungen inklusive Theme, Brett, Layout, Engine-Elo und Zugmarkierungen
+- importierte PGN- und Chess.com-Partien
+- Favoriten
+- Stockfish-Analysen als JSON
+- Puzzle-Fortschritt
+- Eroeffnungsfortschritt
+- generierter Trainingsstand
+
+Lokale Daten werden immer zuerst gespeichert. Cloud-Sync laeuft danach im Hintergrund, erneut bei wiederhergestellter Verbindung und periodisch. Beim ersten Cloud-Login mit vorhandenen lokalen Daten fragt die App: **„Lokale Daten in Cloud uebernehmen?“**. Dabei kann lokal und Cloud zusammengefuehrt oder der Cloud-Stand verwendet werden.
+
+Konfliktverhalten: Partien werden ueber ID und bestehenden PGN-Fingerprint zusammengefuehrt. Lokale Analysen und Favoriten bleiben beim Merge erhalten. Puzzle- und Eroeffnungsfortschritt wird nach Puzzle-/Opening-ID zusammengefuehrt.
+
+## Online spielen
+
+Der Bereich **Online spielen** ist als funktionsfaehige Supabase-Realtime-Version umgesetzt:
+
+- echte Profilsuche, keine Fake-Spieler
+- Einladung an einen ausgewaehlten Nutzer
+- Zeitkontrollen `1+0`, `3+0`, `5+0`, `10+0`, `15+10`
+- zufaellige Farbvergabe
+- offene Einladung und Beitritt des zweiten Spielers
+- legale Zuege mit `chess.js`
+- Live-Zuege ueber Supabase Realtime
+- synchronisierte FEN, Zugliste, PGN und Restzeiten
+- Zeitueberschreitung und normales Partieende
+- fertige Partie wird automatisch in die importierten Partien uebernommen und ist im vorhandenen Viewer analysierbar
+
+Realtime setzt voraus, dass die SQL-Migration ausgefuehrt wurde und beide Browser dasselbe Supabase-Projekt erreichen. Die Zugaktualisierung verwendet einen `updated_at`-Vergleich, um gleichzeitige veraltete Schreibvorgaenge abzuweisen. Fuer Turnierbetrieb waeren serverseitige Zeitkontrolle, verbindliche Zugvalidierung und Supabase Auth weitere Haertungsschritte.
+
 ## Stockfish Setup
 
 FranChess.co benoetigt echte Stockfish-WASM-Dateien. Beim Build kopiert `npm run prepare:stockfish` die Browser-Variante aus dem npm-Paket `stockfish@18.0.7` in den Public-Ordner:
@@ -73,9 +141,9 @@ Legal-Move-Dots, Pfeile und Markierungen bleiben dezent und auf den Paletten les
 
 Der Layout-Modus ist persistent:
 
-- `Automatisch`: Handy nutzt Bottom-Bar, Desktop nutzt Top-Navigation.
-- `Web/Layout oben`: Top-Navigation auf allen Geraeten.
-- `Mobile Layout unten`: Bottom-Bar auch auf Desktop/Laptop erzwingen.
+- `Automatisch`: Handy nutzt Bottom-Bar, Tablet eine kompakte Top-Navigation und Desktop die Sidebar.
+- `Web/Layout oben`: die kompakte Navigation bleibt auch in schmalen Layouts oben.
+- `Mobile Layout unten`: Bottom-Bar kann auch auf Desktop/Laptop erzwungen werden.
 
 Die Bottom-Bar beruecksichtigt Safe Areas und ist etwas deckender, damit sie mehr wie eine native App-Leiste wirkt.
 
@@ -134,4 +202,8 @@ netlify dev
 - Der Puzzle-Bereich benoetigt eine lokal erzeugte `public/data/puzzles.json`; es wird kein grosser Lichess-Datensatz gebundelt.
 - Der Eroeffnungsbereich trainiert aktuell die Hauptvariante und zeigt PGN-Kommentare; vollstaendige Variantenbaum-UI ist vorbereitet, aber noch nicht ausgebaut.
 - Der Button `Als Training speichern` markiert im Viewer noch nicht dauerhaft eine eigene Trainingssammlung.
-- Supabase ist vorbereitet, aber lokaler Speicher bleibt der robuste Standardpfad.
+- Der Username-Login besitzt absichtlich kein Passwort und keine echte Identitaetspruefung.
+- Realtime-Uhren werden clientseitig dargestellt und in der Datenbank fortgeschrieben; fuer wettbewerbssichere Bedenkzeit braucht es eine serverseitige Autoritaet.
+- Offline erstellte lokale Daten werden spaeter synchronisiert, Online-Partien selbst koennen ohne Verbindung jedoch nicht fortgesetzt werden.
+- Importierte eigene Eroeffnungs-PGN-Dateien bleiben lokal; synchronisiert wird derzeit ihr Fortschritt, nicht der komplette Variantenbaum.
+- Der Vite-Build meldet wegen Schachbrett, Supabase und Analyse-Code einen Bundle-Groessenhinweis; das ist kein Build-Fehler.

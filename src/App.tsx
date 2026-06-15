@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, Brain, Download, Eye, Play, Settings, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, BarChart3, Brain, Download, Eye, Gamepad2, Play, Settings, Upload } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { BrandLogo } from "./components/BrandLogo";
 import { Layout } from "./components/Layout";
+import { LoginScreen } from "./components/LoginScreen";
 import { HomePage } from "./pages/HomePage";
 import { UploadPage } from "./pages/UploadPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -11,12 +12,17 @@ import { PlayPage } from "./pages/PlayPage";
 import { TrainingPage } from "./pages/TrainingPage";
 import { ExportPage } from "./pages/ExportPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { OnlinePlayPage } from "./pages/OnlinePlayPage";
 import { storageAdapter } from "./lib/storage";
-import { loadSettings, saveSettings } from "./lib/storage/settings";
-import type { CoachView, StoredGame } from "./types";
+import { defaultSettings, loadSettings, saveSettings } from "./lib/storage/settings";
+import { loadProfile, saveProfile } from "./lib/storage/profile";
+import { hasLocalUserData, hasMigrated, loadCloudSnapshot, loginOrCreateProfile, markMigrated, mergeSnapshots, pushCloudSnapshot, type CloudSnapshot } from "./lib/storage/cloudSync";
+import { isSupabaseConfigured } from "./lib/storage/supabase";
+import type { CloudSyncState, CoachUserProfile, CoachView, StoredGame } from "./types";
 
 const nav = [
   { id: "home", label: "Start", icon: Activity },
+  { id: "online", label: "Online spielen", icon: Gamepad2 },
   { id: "upload", label: "Upload", icon: Upload },
   { id: "dashboard", label: "Übersicht", icon: BarChart3 },
   { id: "viewer", label: "Analyse", icon: Eye },
@@ -32,20 +38,103 @@ export default function App() {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [viewerInitialPly, setViewerInitialPly] = useState<number | null>(null);
   const [settings, setSettings] = useState(loadSettings);
+  const [profile, setProfile] = useState<CoachUserProfile>(loadProfile);
+  const [cloudState, setCloudState] = useState<CloudSyncState>(isSupabaseConfigured ? "syncing" : "local");
+  const [booting, setBooting] = useState(true);
+  const [pendingCloud, setPendingCloud] = useState<CloudSnapshot | null>(null);
   const [showSplash, setShowSplash] = useState(() => shouldShowMobileSplash());
+  const syncReady = useRef(false);
+  const syncTimer = useRef<number | null>(null);
 
   useEffect(() => {
     storageAdapter.loadGames().then((loaded) => {
       setGames(loaded);
       setSelectedGameId(loaded[0]?.id ?? null);
+      setBooting(false);
     });
   }, []);
+
+  useEffect(() => {
+    if (booting || !profile.username) return;
+    if (!isSupabaseConfigured) {
+      setCloudState("local");
+      return;
+    }
+    if (!profile.id) {
+      setCloudState("syncing");
+      loginOrCreateProfile(profile.username).then((connected) => {
+        saveProfile(connected);
+        setProfile(connected);
+      }).catch(() => setCloudState("offline"));
+      return;
+    }
+    let cancelled = false;
+    setCloudState("syncing");
+    loadCloudSnapshot(profile.id, defaultSettings).then(async (cloud) => {
+      if (cancelled) return;
+      if (hasLocalUserData(games) && !hasMigrated(profile.id!)) {
+        setPendingCloud(cloud);
+        setCloudState("online");
+        return;
+      }
+      const merged = mergeSnapshots(games, cloud.games);
+      setGames(merged);
+      setSelectedGameId((current) => current ?? merged[0]?.id ?? null);
+      await storageAdapter.saveGames(merged);
+      if (cloud.settings) setSettings(cloud.settings);
+      syncReady.current = true;
+      setCloudState("online");
+    }).catch(() => {
+      if (!cancelled) setCloudState("offline");
+    });
+    return () => { cancelled = true; };
+  }, [booting, profile.id]);
+
+  useEffect(() => {
+    if (!profile.username || profile.id || !isSupabaseConfigured) return;
+    const reconnect = () => {
+      setCloudState("syncing");
+      loginOrCreateProfile(profile.username!).then((connected) => {
+        saveProfile(connected);
+        setProfile(connected);
+      }).catch(() => setCloudState("offline"));
+    };
+    window.addEventListener("online", reconnect);
+    return () => window.removeEventListener("online", reconnect);
+  }, [profile.id, profile.username]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.darkMode);
     document.documentElement.dataset.theme = settings.colorTheme;
     saveSettings(settings);
   }, [settings]);
+
+  useEffect(() => {
+    if (!syncReady.current || !profile.id || !isSupabaseConfigured) return;
+    if (syncTimer.current) window.clearTimeout(syncTimer.current);
+    syncTimer.current = window.setTimeout(() => {
+      setCloudState("syncing");
+      pushCloudSnapshot(profile.id!, games, settings)
+        .then(() => setCloudState("online"))
+        .catch(() => setCloudState("offline"));
+    }, 700);
+    return () => { if (syncTimer.current) window.clearTimeout(syncTimer.current); };
+  }, [games, profile.id, settings]);
+
+  useEffect(() => {
+    if (!profile.id || !isSupabaseConfigured) return;
+    const syncNow = () => {
+      if (!syncReady.current) return;
+      setCloudState("syncing");
+      pushCloudSnapshot(profile.id!, games, settings).then(() => setCloudState("online")).catch(() => setCloudState("offline"));
+    };
+    window.addEventListener("online", syncNow);
+    const interval = window.setInterval(syncNow, 30_000);
+    return () => {
+      window.removeEventListener("online", syncNow);
+      window.clearInterval(interval);
+    };
+  }, [games, profile.id, settings]);
 
   useEffect(() => {
     if (!showSplash) return;
@@ -86,6 +175,42 @@ export default function App() {
     window.localStorage.setItem("franchess.lastView.v1", nextView);
   }
 
+  async function handleLogin(username: string) {
+    const nextProfile = await loginOrCreateProfile(username);
+    saveProfile(nextProfile);
+    setProfile(nextProfile);
+  }
+
+  function handleLocalLogin(username: string) {
+    const nextProfile = { username, chessComUsername: username, createdAt: new Date().toISOString() };
+    saveProfile(nextProfile);
+    setProfile(nextProfile);
+    setCloudState("local");
+  }
+
+  async function resolveMigration(uploadLocal: boolean) {
+    if (!profile.id || !pendingCloud) return;
+    const nextGames = uploadLocal ? mergeSnapshots(games, pendingCloud.games) : pendingCloud.games;
+    const nextSettings = uploadLocal ? settings : (pendingCloud.settings ?? settings);
+    setGames(nextGames);
+    setSettings(nextSettings);
+    setSelectedGameId(nextGames[0]?.id ?? null);
+    await storageAdapter.saveGames(nextGames);
+    markMigrated(profile.id);
+    setPendingCloud(null);
+    syncReady.current = true;
+    setCloudState("syncing");
+    try {
+      await pushCloudSnapshot(profile.id, nextGames, nextSettings);
+      setCloudState("online");
+    } catch {
+      setCloudState("offline");
+    }
+  }
+
+  if (booting) return <div className="app-loading"><BrandLogo size="lg" /><span>FranChess wird vorbereitet...</span></div>;
+  if (!profile.username) return <LoginScreen onLogin={handleLogin} onLocalLogin={handleLocalLogin} cloudAvailable={isSupabaseConfigured} />;
+
   return (
     <>
     {showSplash && (
@@ -102,8 +227,11 @@ export default function App() {
       view={view}
       onNavigate={navigate}
       layoutMode={settings.layoutMode}
+      profile={profile}
+      cloudState={cloudState}
     >
       {view === "home" && <HomePage onNavigate={navigate} games={games} />}
+      {view === "online" && <OnlinePlayPage profile={profile} settings={settings} games={games} onGamesChange={updateGames} onOpenGame={openGame} />}
       {view === "upload" && <UploadPage games={games} onGamesChange={updateGames} onOpenGame={openGame} onToggleFavorite={toggleFavorite} />}
       {view === "dashboard" && <DashboardPage games={games} onNavigate={setView} />}
       {view === "viewer" && (
@@ -133,6 +261,19 @@ export default function App() {
         />
       )}
     </Layout>
+    {pendingCloud && (
+      <div className="modal-backdrop">
+        <section className="migration-modal" role="dialog" aria-modal="true" aria-labelledby="migration-title">
+          <p className="eyebrow">Erster Cloud-Start</p>
+          <h2 id="migration-title">Lokale Daten in Cloud übernehmen?</h2>
+          <p>Auf diesem Gerät wurden bereits Daten gefunden. Du kannst sie mit dem Profil zusammenführen oder stattdessen den aktuellen Cloud-Stand verwenden.</p>
+          <div className="migration-actions">
+            <button type="button" className="login-primary" onClick={() => void resolveMigration(true)}>Lokale Daten übernehmen</button>
+            <button type="button" className="login-secondary" onClick={() => void resolveMigration(false)}>Cloud-Daten verwenden</button>
+          </div>
+        </section>
+      </div>
+    )}
     </>
   );
 }
