@@ -19,8 +19,9 @@ npm run build
 
 FranChess arbeitet local-first. Supabase erweitert die lokale Speicherung um Profil-Sync und Online-Partien; Import, Viewer, Coach, Training und Stockfish bleiben auch bei einem Cloud-Ausfall lokal nutzbar.
 
-1. Im Supabase SQL Editor die Migration [`supabase/migrations/202606150001_franchess_cloud.sql`](supabase/migrations/202606150001_franchess_cloud.sql) ausfuehren.
-2. Lokal eine `.env` oder `.env.local` anlegen. In Netlify dieselben Werte unter **Project configuration > Environment variables** eintragen.
+1. Im Supabase SQL Editor zuerst [`supabase/migrations/202606150001_franchess_cloud.sql`](supabase/migrations/202606150001_franchess_cloud.sql) ausfuehren.
+2. Danach [`supabase/migrations/202606150002_online_game_runtime.sql`](supabase/migrations/202606150002_online_game_runtime.sql) in einer neuen Query ausfuehren. Diese Migration stellt die serverseitige Uhr sowie Zug-, Remis- und Aufgeben-Operationen bereit.
+3. Lokal eine `.env` oder `.env.local` anlegen. In Netlify dieselben Werte unter **Project configuration > Environment variables** eintragen.
 
 ```env
 VITE_SUPABASE_URL=https://hxvhnxtcifhroisqdqsy.supabase.co
@@ -77,11 +78,14 @@ Der Bereich **Online spielen** ist als funktionsfaehige Supabase-Realtime-Versio
 - offene Einladung und Beitritt des zweiten Spielers
 - legale Zuege mit `chess.js`
 - Live-Zuege ueber Supabase Realtime
-- synchronisierte FEN, Zugliste, PGN und Restzeiten
+- serverautorisierte, zwischen Geraeten synchronisierte Restzeiten
+- Coach-Brettsteuerung, Live-Bewertungsbalken und Materialanzeige
+- Remis anbieten/annehmen und Partie aufgeben
+- synchronisierte FEN, Zugliste und PGN
 - Zeitueberschreitung und normales Partieende
 - fertige Partie wird automatisch in die importierten Partien uebernommen und ist im vorhandenen Viewer analysierbar
 
-Realtime setzt voraus, dass die SQL-Migration ausgefuehrt wurde und beide Browser dasselbe Supabase-Projekt erreichen. Die Zugaktualisierung verwendet einen `updated_at`-Vergleich, um gleichzeitige veraltete Schreibvorgaenge abzuweisen. Fuer Turnierbetrieb waeren serverseitige Zeitkontrolle, verbindliche Zugvalidierung und Supabase Auth weitere Haertungsschritte.
+Realtime setzt voraus, dass beide SQL-Migrationen ausgefuehrt wurden und beide Browser dasselbe Supabase-Projekt erreichen. Uhr und Restzeitberechnung laufen atomar mit der Supabase-Serverzeit; Clients gleichen ihre Anzeige regelmaessig mit dieser Zeit ab. Die Zugaktualisierung verwendet zusaetzlich einen `updated_at`-Vergleich, um gleichzeitige veraltete Schreibvorgaenge abzuweisen. Fuer Turnierbetrieb waeren verbindliche serverseitige Schachregelvalidierung und Supabase Auth weitere Haertungsschritte.
 
 ## Stockfish Setup
 

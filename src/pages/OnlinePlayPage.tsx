@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { Check, Clock3, Gamepad2, Radio, Search, Send, Users } from "lucide-react";
+import { Check, Clock3, Flag, Gamepad2, Handshake, Radio, Search, Send, Users } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
+import { BoardControls } from "../components/BoardControls";
+import { CapturedMaterialDisplay } from "../components/CapturedMaterialDisplay";
+import { EvaluationBar } from "../components/EvaluationBar";
+import { useKeyboardNavigation } from "../components/useKeyboardNavigation";
 import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
 import { boardColorsFor, buildSquareStyles, pieceColorAt } from "../lib/chess/boardUi";
 import { mergeUniqueGames } from "../lib/chess/dedupe";
 import { parsePgnBatch } from "../lib/chess/pgn";
 import { supabase } from "../lib/storage/supabase";
+import { stockfishService } from "../lib/stockfish/StockfishService";
 import type { AppSettings, CoachUserProfile, StoredGame } from "../types";
 
 interface PublicProfile {
@@ -40,6 +45,8 @@ interface OnlineGameRow {
   clock_white_ms: number;
   clock_black_ms: number;
   last_move_at: string | null;
+  draw_offer_profile_id?: string | null;
+  termination?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -67,6 +74,7 @@ export function OnlinePlayPage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const refreshInFlight = useRef(false);
 
   const activeGame = onlineGames.find((game) => game.id === selectedId)
@@ -79,21 +87,34 @@ export function OnlinePlayPage({
     if (!supabase || !profile.id) return;
     const client = supabase;
     void refreshGames();
+    void syncServerClock();
     const channel = client
       .channel(`online-games-${profile.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "online_games" }, () => void refreshGames())
       .subscribe();
     const interval = window.setInterval(() => void refreshGames(), 1_000);
+    const clockSyncInterval = window.setInterval(() => void syncServerClock(), 30_000);
     const onFocus = () => void refreshGames();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
     return () => {
       window.clearInterval(interval);
+      window.clearInterval(clockSyncInterval);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
       void client.removeChannel(channel);
     };
   }, [profile.id]);
+
+  async function syncServerClock() {
+    if (!supabase) return;
+    const startedAt = Date.now();
+    const { data, error } = await supabase.rpc("franchess_server_time");
+    const finishedAt = Date.now();
+    if (!error && data) {
+      setServerOffsetMs(new Date(data as string).getTime() - ((startedAt + finishedAt) / 2));
+    }
+  }
 
   useEffect(() => {
     if (!activeGame || activeGame.status !== "finished" || !activeGame.pgn) return;
@@ -186,15 +207,10 @@ export function OnlinePlayPage({
 
   async function acceptInvitation(game: OnlineGameRow) {
     if (!supabase) return;
-    const now = new Date().toISOString();
-    const { initialMs } = parseTimeControl(game.time_control);
-    const { error } = await supabase.from("online_games").update({
-      status: "active",
-      clock_white_ms: initialMs,
-      clock_black_ms: initialMs,
-      last_move_at: now,
-      updated_at: now
-    }).eq("id", game.id).eq("status", "waiting");
+    const { error } = await supabase.rpc("franchess_accept_online_game", {
+      p_game_id: game.id,
+      p_profile_id: profile.id
+    });
     if (error) setMessage(error.message);
     else {
       setSelectedId(game.id);
@@ -265,7 +281,7 @@ export function OnlinePlayPage({
 
       <section className="online-board-area">
         {activeGame ? (
-          <LiveBoard game={activeGame} profile={profile} settings={settings} onUpdated={refreshGames} onOpenAnalysis={() => onOpenGame(activeGame.id)} />
+          <LiveBoard game={activeGame} profile={profile} settings={settings} serverOffsetMs={serverOffsetMs} onUpdated={refreshGames} onOpenAnalysis={() => onOpenGame(activeGame.id)} />
         ) : (
           <div className="premium-panel online-empty"><Gamepad2 size={32} /><h2>Bereit für eine Partie?</h2><p>Suche links nach einem echten FranChess-Profil und sende eine Einladung.</p></div>
         )}
@@ -274,7 +290,7 @@ export function OnlinePlayPage({
   );
 }
 
-function LiveBoard({ game, profile, settings, onUpdated, onOpenAnalysis }: { game: OnlineGameRow; profile: CoachUserProfile; settings: AppSettings; onUpdated: () => Promise<void>; onOpenAnalysis: () => void }) {
+function LegacyLiveBoard({ game, profile, settings, onUpdated, onOpenAnalysis }: { game: OnlineGameRow; profile: CoachUserProfile; settings: AppSettings; onUpdated: () => Promise<void>; onOpenAnalysis: () => void }) {
   const board = useResponsiveBoardWidth(690);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [tick, setTick] = useState(Date.now());
@@ -402,6 +418,208 @@ function LiveBoard({ game, profile, settings, onUpdated, onOpenAnalysis }: { gam
   );
 }
 
+function LiveBoard({ game, profile, settings, serverOffsetMs, onUpdated, onOpenAnalysis }: { game: OnlineGameRow; profile: CoachUserProfile; settings: AppSettings; serverOffsetMs: number; onUpdated: () => Promise<void>; onOpenAnalysis: () => void }) {
+  const board = useResponsiveBoardWidth(620);
+  const maxPly = game.move_history?.length ?? 0;
+  const [currentPly, setCurrentPly] = useState(maxPly);
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [tick, setTick] = useState(Date.now());
+  const [evaluation, setEvaluation] = useState<{ cp: number | null; mate: number | null }>({ cp: null, mate: null });
+  const [actionMessage, setActionMessage] = useState("");
+  const [boardVersion, setBoardVersion] = useState(0);
+  const previousMaxPly = useRef(maxPly);
+  const timeoutClaimed = useRef(false);
+  const liveChess = useMemo(() => replayGame(game), [game.fen, game.move_history]);
+  const position = useMemo(() => positionAtPly(game, currentPly), [game.move_history, currentPly]);
+  const isWhite = game.white_profile_id === profile.id;
+  const orientation = isWhite ? "white" : "black";
+  const atLatest = currentPly === maxPly;
+  const myTurn = game.status === "active" && atLatest && liveChess.turn() === (isWhite ? "w" : "b");
+  const boardColors = boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode);
+  const squareStyles = buildSquareStyles({ fen: position, selectedSquare, showLegalMoves: settings.showLegalMoves && myTurn });
+  const clocks = currentClocks(game, liveChess.turn(), tick + serverOffsetMs);
+  const opponentOfferedDraw = Boolean(game.draw_offer_profile_id && game.draw_offer_profile_id !== profile.id);
+  const ownDrawOffer = game.draw_offer_profile_id === profile.id;
+
+  useKeyboardNavigation({ enabled: true, current: currentPly, max: maxPly, onChange: setPly });
+
+  useEffect(() => {
+    setCurrentPly(maxPly);
+    previousMaxPly.current = maxPly;
+    setSelectedSquare(null);
+  }, [game.id]);
+
+  useEffect(() => {
+    const previous = previousMaxPly.current;
+    setCurrentPly((current) => current === previous ? maxPly : Math.min(current, maxPly));
+    previousMaxPly.current = maxPly;
+  }, [maxPly]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick(Date.now()), 200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEvaluation({ cp: null, mate: null });
+    const timer = window.setTimeout(() => {
+      void stockfishService.evaluateFen(position, "quick", settings.engineElo)
+        .then((result) => { if (!cancelled) setEvaluation({ cp: result.cp, mate: result.mate }); })
+        .catch(() => { if (!cancelled) setEvaluation({ cp: null, mate: null }); });
+    }, 180);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [position, settings.engineElo]);
+
+  useEffect(() => {
+    if (game.status !== "active" || timeoutClaimed.current) return;
+    if (clocks.white > 0 && clocks.black > 0) return;
+    timeoutClaimed.current = true;
+    void finishOnTime(clocks.white <= 0 ? "0-1" : "1-0").finally(() => { timeoutClaimed.current = false; });
+  }, [game.status, game.updated_at, clocks.white <= 0, clocks.black <= 0]);
+
+  function setPly(next: number) {
+    setCurrentPly(Math.max(0, Math.min(maxPly, next)));
+    setSelectedSquare(null);
+  }
+
+  async function finishOnTime(result: "1-0" | "0-1") {
+    if (!supabase) return;
+    const { error } = await supabase.rpc("franchess_claim_online_timeout", {
+      p_game_id: game.id,
+      p_pgn: buildOnlinePgn(game, result, "time forfeit")
+    });
+    if (error) setActionMessage(error.message);
+    await onUpdated();
+  }
+
+  async function playMove(from: Square, to: Square) {
+    if (!supabase || !myTurn) return false;
+    const next = replayGame(game);
+    const move = next.move({ from, to, promotion: "q" });
+    setSelectedSquare(null);
+    if (!move) {
+      setBoardVersion((value) => value + 1);
+      return false;
+    }
+    const result = gameResult(next);
+    const moveHistory = [...(game.move_history ?? []), { from, to, promotion: move.promotion, san: move.san, fen: next.fen(), played_at: new Date().toISOString() }];
+    const nextGame = { ...game, move_history: moveHistory };
+    const { error } = await supabase.rpc("franchess_play_online_move", {
+      p_game_id: game.id,
+      p_profile_id: profile.id,
+      p_expected_updated_at: game.updated_at,
+      p_fen: next.fen(),
+      p_pgn: buildOnlinePgn(nextGame, result, result === "*" ? "unterminated" : "normal"),
+      p_move_history: moveHistory,
+      p_status: result === "*" ? "active" : "finished"
+    });
+    if (error) {
+      setActionMessage(error.message);
+      setBoardVersion((value) => value + 1);
+    } else {
+      setActionMessage("");
+      setCurrentPly(maxPly + 1);
+    }
+    await onUpdated();
+    return !error;
+  }
+
+  async function resign() {
+    if (!supabase || game.status !== "active") return;
+    if (!window.confirm("Partie wirklich aufgeben?")) return;
+    const result = isWhite ? "0-1" : "1-0";
+    const { error } = await supabase.rpc("franchess_resign_online_game", {
+      p_game_id: game.id,
+      p_profile_id: profile.id,
+      p_pgn: buildOnlinePgn(game, result, "resignation")
+    });
+    setActionMessage(error?.message ?? "Partie aufgegeben.");
+    await onUpdated();
+  }
+
+  async function offerOrAcceptDraw() {
+    if (!supabase || game.status !== "active" || ownDrawOffer) return;
+    const { error } = await supabase.rpc("franchess_draw_online_game", {
+      p_game_id: game.id,
+      p_profile_id: profile.id,
+      p_pgn: buildOnlinePgn(game, "1/2-1/2", "draw agreement")
+    });
+    setActionMessage(error?.message ?? (opponentOfferedDraw ? "Remis angenommen." : "Remis angeboten."));
+    await onUpdated();
+  }
+
+  function handleDrop(from: Square, to: Square): boolean {
+    if (!myTurn) return false;
+    void playMove(from, to);
+    return true;
+  }
+
+  function clickSquare(square: Square) {
+    if (!myTurn) return;
+    if (selectedSquare) {
+      const ownColor = isWhite ? "w" : "b";
+      if (pieceColorAt(position, square) === ownColor) setSelectedSquare(square);
+      else void playMove(selectedSquare, square);
+      return;
+    }
+    if (pieceColorAt(position, square) === (isWhite ? "w" : "b")) setSelectedSquare(square);
+  }
+
+  return (
+    <div className="live-board-shell">
+      <div className="online-game-header premium-panel">
+        <div><p className="eyebrow">{statusLabel(game.status)}</p><h2>{game.white_username || "Weiß"} vs {game.black_username || "Schwarz"}</h2></div>
+        <span className="status-chip"><Clock3 size={14} /> {game.time_control}</span>
+      </div>
+      <PlayerClock name={orientation === "white" ? game.black_username : game.white_username} value={orientation === "white" ? clocks.black : clocks.white} active={game.status === "active" && liveChess.turn() === (orientation === "white" ? "b" : "w")} />
+      <div className="online-board-card premium-panel">
+        <div className="online-board-grid">
+          <EvaluationBar cp={evaluation.cp} mate={evaluation.mate} />
+          <div ref={board.ref} className="board-touch-area online-board-frame">
+            <Chessboard
+              key={`online-${game.id}-${boardVersion}`}
+              id={`online-${game.id}`}
+              position={position}
+              boardWidth={board.width}
+              boardOrientation={orientation}
+              onPieceDrop={(from, to) => handleDrop(from as Square, to as Square)}
+              onSquareClick={(square) => clickSquare(square as Square)}
+              isDraggablePiece={({ piece }) => myTurn && piece.startsWith(isWhite ? "w" : "b")}
+              customSquareStyles={squareStyles}
+              customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+              customLightSquareStyle={{ backgroundColor: boardColors.light }}
+              animationDuration={180}
+              autoPromoteToQueen
+            />
+          </div>
+          <div className="online-material-side"><CapturedMaterialDisplay fen={position} orientation={orientation} layout="side" /></div>
+        </div>
+        <div className="online-material-mobile"><CapturedMaterialDisplay fen={position} orientation={orientation} /></div>
+        <div className="online-controls-mobile"><BoardControls current={currentPly} max={maxPly} onChange={setPly} /></div>
+      </div>
+      <PlayerClock name={orientation === "white" ? game.white_username : game.black_username} value={orientation === "white" ? clocks.white : clocks.black} active={game.status === "active" && liveChess.turn() === (orientation === "white" ? "w" : "b")} />
+      <div className="online-moves premium-panel">
+        <div className="section-heading"><h3>Zugverlauf</h3><span>{maxPly} Halbzüge</span></div>
+        <div className="online-controls-desktop"><BoardControls current={currentPly} max={maxPly} onChange={setPly} /></div>
+        <div className="move-strip">{game.move_history?.map((move, index) => <button type="button" className={currentPly === index + 1 ? "selected" : ""} onClick={() => setPly(index + 1)} key={`${move.san}-${index}`}>{Math.floor(index / 2) + 1}{index % 2 ? "..." : "."} {move.san}</button>)}</div>
+        {game.status === "waiting" && <p>Einladung gesendet. Die Uhr startet erst, wenn der zweite Spieler beitritt.</p>}
+        {game.status === "active" && <p>{atLatest ? (myTurn ? "Du bist am Zug." : "Warte auf den Zug deines Gegners.") : `Du betrachtest Zug ${currentPly} von ${maxPly}.`}</p>}
+        {opponentOfferedDraw && <p className="draw-notice">Dein Gegner bietet Remis an.</p>}
+        {ownDrawOffer && <p className="draw-notice">Remisangebot gesendet. Es bleibt bis zum nächsten Zug offen.</p>}
+        {actionMessage && <p className="online-action-message">{actionMessage}</p>}
+        {game.status === "active" && (
+          <div className="online-game-actions">
+            <ActionButton variant="quiet" onClick={() => void offerOrAcceptDraw()} disabled={ownDrawOffer} icon={<Handshake size={16} />}>{opponentOfferedDraw ? "Remis annehmen" : ownDrawOffer ? "Remis angeboten" : "Remis anbieten"}</ActionButton>
+            <ActionButton variant="quiet" onClick={() => void resign()} icon={<Flag size={16} />}>Aufgeben</ActionButton>
+          </div>
+        )}
+        {game.status === "finished" && <ActionButton onClick={onOpenAnalysis}>Partie analysieren</ActionButton>}
+      </div>
+    </div>
+  );
+}
+
 function PlayerClock({ name, value, active }: { name?: string; value: number; active: boolean }) {
   return <div className={`player-clock ${active ? "active" : ""}`}><span>{name || "Spieler"}</span><strong>{formatClock(value)}</strong></div>;
 }
@@ -410,6 +628,26 @@ function replayGame(game: Pick<OnlineGameRow, "move_history">): Chess {
   const chess = new Chess();
   for (const move of game.move_history ?? []) chess.move({ from: move.from, to: move.to, promotion: move.promotion || "q" });
   return chess;
+}
+
+function positionAtPly(game: Pick<OnlineGameRow, "move_history">, ply: number): string {
+  if (ply <= 0) return new Chess().fen();
+  return game.move_history?.[Math.min(ply, game.move_history.length) - 1]?.fen ?? replayGame(game).fen();
+}
+
+function buildOnlinePgn(game: Pick<OnlineGameRow, "move_history" | "white_username" | "black_username" | "time_control">, result: "1-0" | "0-1" | "1/2-1/2" | "*", termination: string): string {
+  const chess = replayGame(game);
+  chess.header(
+    "Event", "FranChess Online",
+    "Site", "FranChess.co",
+    "Date", new Date().toISOString().slice(0, 10).replace(/-/g, "."),
+    "White", game.white_username || "White",
+    "Black", game.black_username || "Black",
+    "TimeControl", game.time_control,
+    "Termination", termination,
+    "Result", result
+  );
+  return chess.pgn();
 }
 
 function gameResult(chess: Chess): "1-0" | "0-1" | "1/2-1/2" | "*" {
