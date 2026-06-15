@@ -15,7 +15,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { OnlinePlayPage } from "./pages/OnlinePlayPage";
 import { storageAdapter } from "./lib/storage";
 import { defaultSettings, loadSettings, saveSettings } from "./lib/storage/settings";
-import { loadProfile, saveProfile } from "./lib/storage/profile";
+import { clearProfile, loadProfile, saveProfile } from "./lib/storage/profile";
 import { hasLocalUserData, hasMigrated, loadCloudSnapshot, loginOrCreateProfile, markMigrated, mergeSnapshots, pushCloudSnapshot, type CloudSnapshot } from "./lib/storage/cloudSync";
 import { isSupabaseConfigured } from "./lib/storage/supabase";
 import type { CloudSyncState, CoachUserProfile, CoachView, StoredGame } from "./types";
@@ -188,6 +188,14 @@ export default function App() {
     setCloudState("local");
   }
 
+  function logout() {
+    clearProfile();
+    syncReady.current = false;
+    setPendingCloud(null);
+    setProfile({});
+    setCloudState(isSupabaseConfigured ? "syncing" : "local");
+  }
+
   async function resolveMigration(uploadLocal: boolean) {
     if (!profile.id || !pendingCloud) return;
     const nextGames = uploadLocal ? mergeSnapshots(games, pendingCloud.games) : pendingCloud.games;
@@ -258,6 +266,7 @@ export default function App() {
           onGamesChange={updateGames}
           onOpenGame={openGame}
           onToggleFavorite={toggleFavorite}
+          onLogout={logout}
         />
       )}
     </Layout>

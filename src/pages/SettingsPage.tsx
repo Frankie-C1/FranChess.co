@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Columns3, Database, Moon, Move, Palette, Puzzle, Search, Sparkles, Star, Trash2 } from "lucide-react";
+import { Columns3, Database, LogOut, Moon, Move, Palette, Puzzle, Search, Sparkles, Star, Trash2 } from "lucide-react";
 import { filterGamesByPlayer, sortGamesByDate, type GameSortOrder } from "../lib/chess/gameList";
 import type { AppSettings, BoardTheme, ColorTheme, EngineElo, LayoutMode, StoredGame } from "../types";
 
@@ -37,7 +37,8 @@ export function SettingsPage({
   games,
   onGamesChange,
   onOpenGame,
-  onToggleFavorite
+  onToggleFavorite,
+  onLogout
 }: {
   settings: AppSettings;
   onSettingsChange: (settings: AppSettings) => void;
@@ -45,6 +46,7 @@ export function SettingsPage({
   onGamesChange: (games: StoredGame[]) => Promise<void>;
   onOpenGame: (id: string) => void;
   onToggleFavorite: (id: string) => Promise<void>;
+  onLogout: () => void;
 }) {
   const favorites = games.filter((game) => game.favorite);
   const [playerToDelete, setPlayerToDelete] = useState("");
@@ -197,6 +199,17 @@ export function SettingsPage({
           </div>
           {dataMessage && <p className="rounded-md bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-muted)]">{dataMessage}</p>}
         </div>
+      </SettingsSection>
+
+      <SettingsSection icon={<LogOut size={19} />} title="Benutzerkonto">
+        <button
+          type="button"
+          onClick={onLogout}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
+        >
+          <LogOut size={17} />
+          Abmelden
+        </button>
       </SettingsSection>
 
       <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm lg:col-span-2">
