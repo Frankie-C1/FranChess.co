@@ -106,6 +106,18 @@ alter table public.puzzle_progress enable row level security;
 alter table public.opening_progress enable row level security;
 alter table public.online_games enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table
+  public.profiles,
+  public.user_settings,
+  public.games,
+  public.analyses,
+  public.training_progress,
+  public.puzzle_progress,
+  public.opening_progress,
+  public.online_games
+to anon, authenticated;
+
 do $$
 declare table_name text;
 begin

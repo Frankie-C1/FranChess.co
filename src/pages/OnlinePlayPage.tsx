@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { Check, Clock3, Gamepad2, Radio, Search, Send, Users } from "lucide-react";
@@ -67,6 +67,7 @@ export function OnlinePlayPage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const refreshInFlight = useRef(false);
 
   const activeGame = onlineGames.find((game) => game.id === selectedId)
     ?? onlineGames.find((game) => game.status === "active")
@@ -82,7 +83,16 @@ export function OnlinePlayPage({
       .channel(`online-games-${profile.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "online_games" }, () => void refreshGames())
       .subscribe();
-    return () => { void client.removeChannel(channel); };
+    const interval = window.setInterval(() => void refreshGames(), 1_000);
+    const onFocus = () => void refreshGames();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      void client.removeChannel(channel);
+    };
   }, [profile.id]);
 
   useEffect(() => {
@@ -96,20 +106,25 @@ export function OnlinePlayPage({
   }, [activeGame?.id, activeGame?.status, activeGame?.pgn]);
 
   async function refreshGames() {
-    if (!supabase || !profile.id) return;
-    const { data, error } = await supabase
-      .from("online_games")
-      .select("*")
-      .or(`white_profile_id.eq.${profile.id},black_profile_id.eq.${profile.id}`)
-      .order("updated_at", { ascending: false })
-      .limit(20);
-    if (error) {
-      setMessage("Online-Partien konnten nicht geladen werden.");
-      return;
+    if (!supabase || !profile.id || refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    try {
+      const { data, error } = await supabase
+        .from("online_games")
+        .select("*")
+        .or(`white_profile_id.eq.${profile.id},black_profile_id.eq.${profile.id}`)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+      if (error) {
+        setMessage("Online-Partien konnten nicht geladen werden.");
+        return;
+      }
+      const rows = (data ?? []) as OnlineGameRow[];
+      setOnlineGames(rows);
+      setSelectedId((current) => current ?? rows[0]?.id ?? null);
+    } finally {
+      refreshInFlight.current = false;
     }
-    const rows = (data ?? []) as OnlineGameRow[];
-    setOnlineGames(rows);
-    setSelectedId((current) => current ?? rows[0]?.id ?? null);
   }
 
   async function searchPlayers() {
@@ -172,7 +187,14 @@ export function OnlinePlayPage({
   async function acceptInvitation(game: OnlineGameRow) {
     if (!supabase) return;
     const now = new Date().toISOString();
-    const { error } = await supabase.from("online_games").update({ status: "active", last_move_at: now, updated_at: now }).eq("id", game.id).eq("status", "waiting");
+    const { initialMs } = parseTimeControl(game.time_control);
+    const { error } = await supabase.from("online_games").update({
+      status: "active",
+      clock_white_ms: initialMs,
+      clock_black_ms: initialMs,
+      last_move_at: now,
+      updated_at: now
+    }).eq("id", game.id).eq("status", "waiting");
     if (error) setMessage(error.message);
     else {
       setSelectedId(game.id);

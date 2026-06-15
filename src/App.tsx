@@ -17,7 +17,7 @@ import { storageAdapter } from "./lib/storage";
 import { defaultSettings, loadSettings, saveSettings } from "./lib/storage/settings";
 import { clearProfile, loadProfile, saveProfile } from "./lib/storage/profile";
 import { hasLocalUserData, hasMigrated, loadCloudSnapshot, loginOrCreateProfile, markMigrated, mergeSnapshots, pushCloudSnapshot, type CloudSnapshot } from "./lib/storage/cloudSync";
-import { isSupabaseConfigured } from "./lib/storage/supabase";
+import { isSupabaseConfigured, supabase } from "./lib/storage/supabase";
 import type { CloudSyncState, CoachUserProfile, CoachView, StoredGame } from "./types";
 
 const nav = [
@@ -32,6 +32,12 @@ const nav = [
   { id: "settings", label: "Einstellungen", icon: Settings }
 ] satisfies Array<{ id: CoachView; label: string; icon: LucideIcon }>;
 
+interface PendingInvitation {
+  id: string;
+  opponent: string;
+  timeControl: string;
+}
+
 export default function App() {
   const [view, setView] = useState<CoachView>(() => initialView());
   const [games, setGames] = useState<StoredGame[]>([]);
@@ -42,6 +48,7 @@ export default function App() {
   const [cloudState, setCloudState] = useState<CloudSyncState>(isSupabaseConfigured ? "syncing" : "local");
   const [booting, setBooting] = useState(true);
   const [pendingCloud, setPendingCloud] = useState<CloudSnapshot | null>(null);
+  const [pendingInvitation, setPendingInvitation] = useState<PendingInvitation | null>(null);
   const [showSplash, setShowSplash] = useState(() => shouldShowMobileSplash());
   const syncReady = useRef(false);
   const syncTimer = useRef<number | null>(null);
@@ -137,6 +144,55 @@ export default function App() {
   }, [games, profile.id, settings]);
 
   useEffect(() => {
+    if (!supabase || !profile.id) {
+      setPendingInvitation(null);
+      return;
+    }
+    const client = supabase;
+    let cancelled = false;
+
+    async function refreshInvitations() {
+      const { data, error } = await client
+        .from("online_games")
+        .select("id, white_profile_id, black_profile_id, created_by_profile_id, white_username, black_username, time_control, created_at")
+        .eq("status", "waiting")
+        .or(`white_profile_id.eq.${profile.id},black_profile_id.eq.${profile.id}`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (cancelled || error) return;
+      const invitation = data?.find((row) => row.created_by_profile_id !== profile.id);
+      if (!invitation) {
+        setPendingInvitation(null);
+        return;
+      }
+      setPendingInvitation({
+        id: invitation.id,
+        opponent: invitation.white_profile_id === profile.id
+          ? invitation.black_username || "Ein Spieler"
+          : invitation.white_username || "Ein Spieler",
+        timeControl: invitation.time_control
+      });
+    }
+
+    void refreshInvitations();
+    const channel = client
+      .channel(`global-invitations-${profile.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "online_games" }, () => void refreshInvitations())
+      .subscribe();
+    const interval = window.setInterval(() => void refreshInvitations(), 1_000);
+    const onFocus = () => void refreshInvitations();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      void client.removeChannel(channel);
+    };
+  }, [profile.id]);
+
+  useEffect(() => {
     if (!showSplash) return;
     window.sessionStorage.setItem("franchess.mobileSplash.v1", "shown");
     const timer = window.setTimeout(() => setShowSplash(false), 900);
@@ -192,6 +248,7 @@ export default function App() {
     clearProfile();
     syncReady.current = false;
     setPendingCloud(null);
+    setPendingInvitation(null);
     setProfile({});
     setCloudState(isSupabaseConfigured ? "syncing" : "local");
   }
@@ -237,6 +294,8 @@ export default function App() {
       layoutMode={settings.layoutMode}
       profile={profile}
       cloudState={cloudState}
+      pendingInvitation={pendingInvitation}
+      onOpenInvitation={() => navigate("online")}
     >
       {view === "home" && <HomePage onNavigate={navigate} games={games} />}
       {view === "online" && <OnlinePlayPage profile={profile} settings={settings} games={games} onGamesChange={updateGames} onOpenGame={openGame} />}

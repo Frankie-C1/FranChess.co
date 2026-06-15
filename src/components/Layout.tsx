@@ -11,11 +11,13 @@ interface LayoutProps {
   layoutMode: LayoutMode;
   profile: CoachUserProfile;
   cloudState: CloudSyncState;
+  pendingInvitation: { opponent: string; timeControl: string } | null;
+  onOpenInvitation: () => void;
   utility?: ReactNode;
   children: ReactNode;
 }
 
-export function Layout({ nav, view, onNavigate, layoutMode, profile, cloudState, utility, children }: LayoutProps) {
+export function Layout({ nav, view, onNavigate, layoutMode, profile, cloudState, pendingInvitation, onOpenInvitation, utility, children }: LayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const forceTop = layoutMode === "top";
   const forceBottom = layoutMode === "bottom";
@@ -57,6 +59,17 @@ export function Layout({ nav, view, onNavigate, layoutMode, profile, cloudState,
 
         <main className="app-main">{children}</main>
       </div>
+
+      {pendingInvitation && view !== "online" && (
+        <button type="button" className="invitation-notice" onClick={onOpenInvitation}>
+          <span className="invitation-notice-icon"><Crown size={18} /></span>
+          <span>
+            <strong>Neue Spieleinladung</strong>
+            <small>{pendingInvitation.opponent} fordert dich heraus · {pendingInvitation.timeControl}</small>
+          </span>
+          <ChevronRight size={18} />
+        </button>
+      )}
 
       {menuOpen && <button type="button" className="mobile-menu-backdrop" aria-label="Menü schließen" onClick={() => setMenuOpen(false)} />}
       <aside className={`mobile-menu ${menuOpen ? "open" : ""}`}>
