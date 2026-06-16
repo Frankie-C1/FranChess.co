@@ -1,11 +1,11 @@
-import { ArrowRight, BarChart3, Brain, Eye, Gamepad2, Play, Sparkles, Star, Upload } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpen, Brain, Eye, Gamepad2, Play, Puzzle, Sparkles, Star, Target, Trophy, Upload } from "lucide-react";
 import type { ReactNode } from "react";
 import { ActionButton } from "../components/ActionButton";
 import { buildCoachProfile } from "../lib/analysis/profile";
 import { sortGamesByDate } from "../lib/chess/gameList";
 import type { CoachView, StoredGame } from "../types";
 
-export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) => void; games: StoredGame[] }) {
+export function HomePage({ onNavigate, games, username }: { onNavigate: (view: CoachView) => void; games: StoredGame[]; username: string }) {
   const analyzedGames = games.filter((game) => game.analysis.length > 0);
   const favorites = games.filter((game) => game.favorite);
   const profile = buildCoachProfile(games);
@@ -17,8 +17,8 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
       <section className="dashboard-welcome premium-panel">
         <div>
           <p className="eyebrow">Dein Chess Studio</p>
-          <h1>Willkommen zurück.</h1>
-          <p>Importiere Partien, erkenne Muster und arbeite mit einem klaren Trainingsplan an deinem nächsten Niveau.</p>
+          <h1>Willkommen zurück, {username}.</h1>
+          <p>Spiele, analysiere und trainiere in einem konzentrierten Arbeitsbereich, der sich aus deinen echten Partien entwickelt.</p>
         </div>
         <div className="welcome-actions">
           <ActionButton onClick={() => onNavigate("play")} icon={<Play size={17} />}>Coach starten</ActionButton>
@@ -27,9 +27,9 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
       </section>
 
       <section className="feature-card-grid">
-        <FeatureCard icon={<Gamepad2 />} title="Online spielen" text="Fordere ein echtes FranChess-Profil heraus." action="Lobby öffnen" onClick={() => onNavigate("online")} tone="accent" />
-        <FeatureCard icon={<Brain />} title="Training" text="Puzzles, eigene Fehler und Eröffnungen trainieren." action="Training starten" onClick={() => onNavigate("training")} />
-        <FeatureCard icon={<Eye />} title="Game Review" text="Stockfish-Analyse mit Zugdetails und Coach-Hinweisen." action="Analyse öffnen" onClick={() => onNavigate("viewer")} />
+        <FeatureCard icon={<Gamepad2 />} visual="♞" title="Online spielen" text="Fordere ein echtes FranChess-Profil heraus." action="Lobby öffnen" onClick={() => onNavigate("online")} tone="accent" />
+        <FeatureCard icon={<Puzzle />} visual="✦" title="Puzzle des Tages" text="Trainiere Taktik mit der vorhandenen Puzzle-Sammlung." action="Puzzle starten" onClick={() => onNavigate("training")} />
+        <FeatureCard icon={<Eye />} visual="⌕" title="Partie analysieren" text="Stockfish-Review mit Zugdetails und Coach-Hinweisen." action="Analyse öffnen" onClick={() => onNavigate("viewer")} />
       </section>
 
       <section className="dashboard-metrics">
@@ -68,12 +68,20 @@ export function HomePage({ onNavigate, games }: { onNavigate: (view: CoachView) 
           </div>
         </section>
       </div>
+
+      <section className="recommendation-strip premium-panel">
+        <div><p className="eyebrow">Empfohlen für dich</p><h2>Weiter trainieren</h2></div>
+        <button type="button" onClick={() => onNavigate("training")}><span><Target size={19} /></span><strong>Taktik</strong><small>Aus eigenen Fehlern</small></button>
+        <button type="button" onClick={() => onNavigate("training")}><span><Puzzle size={19} /></span><strong>Puzzles</strong><small>Motive festigen</small></button>
+        <button type="button" onClick={() => onNavigate("training")}><span><BookOpen size={19} /></span><strong>Eröffnungen</strong><small>Repertoire üben</small></button>
+        <button type="button" onClick={() => onNavigate("dashboard")}><span><Trophy size={19} /></span><strong>Fortschritt</strong><small>Profil ansehen</small></button>
+      </section>
     </div>
   );
 }
 
-function FeatureCard({ icon, title, text, action, onClick, tone = "default" }: { icon: ReactNode; title: string; text: string; action: string; onClick: () => void; tone?: "default" | "accent" }) {
-  return <button type="button" className={`dashboard-feature premium-panel ${tone}`} onClick={onClick}><span className="feature-icon">{icon}</span><span><strong>{title}</strong><small>{text}</small></span><span className="feature-action">{action} <ArrowRight size={14} /></span></button>;
+function FeatureCard({ icon, visual, title, text, action, onClick, tone = "default" }: { icon: ReactNode; visual: string; title: string; text: string; action: string; onClick: () => void; tone?: "default" | "accent" }) {
+  return <button type="button" className={`dashboard-feature premium-panel ${tone}`} onClick={onClick}><span className="feature-icon">{icon}</span><span className="feature-copy"><strong>{title}</strong><small>{text}</small></span><span className="feature-visual" aria-hidden="true">{visual}</span><span className="feature-action">{action} <ArrowRight size={14} /></span></button>;
 }
 
 function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {

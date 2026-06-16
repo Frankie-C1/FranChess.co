@@ -1,16 +1,11 @@
 export function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const sizes = {
-    sm: "h-9 w-9",
-    md: "h-11 w-11",
-    lg: "h-20 w-20"
+    sm: "brand-logo-sm",
+    md: "brand-logo-md",
+    lg: "brand-logo-lg"
   };
 
   return (
-    <img
-      src="/franchess-logo.png"
-      alt="FranChess.co Logo"
-      className={`${sizes[size]} shrink-0 rounded-md object-contain`}
-      decoding="async"
-    />
+    <span className={`brand-logo ${sizes[size]}`} role="img" aria-label="FranChess.co Logo" />
   );
 }

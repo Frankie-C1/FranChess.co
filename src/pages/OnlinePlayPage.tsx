@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { Check, Clock3, Flag, Gamepad2, Handshake, Radio, Search, Send, Users } from "lucide-react";
+import { CalendarDays, Check, Clock3, Flag, Gamepad2, Handshake, MoreVertical, Radio, Rocket, Search, Send, Settings2, Timer, Users, Zap } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
 import { BoardControls } from "../components/BoardControls";
 import { CapturedMaterialDisplay } from "../components/CapturedMaterialDisplay";
@@ -73,6 +73,7 @@ export function OnlinePlayPage({
   const [onlineGames, setOnlineGames] = useState<OnlineGameRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [showSetup, setShowSetup] = useState(true);
   const [loading, setLoading] = useState(false);
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const refreshInFlight = useRef(false);
@@ -82,6 +83,11 @@ export function OnlinePlayPage({
     ?? onlineGames[0]
     ?? null;
   const invitations = onlineGames.filter((game) => game.status === "waiting" && isInvitedPlayer(game, profile.id));
+  const gameInFocus = Boolean(activeGame && activeGame.status !== "waiting" && !showSetup);
+
+  useEffect(() => {
+    if (activeGame?.status === "active") setShowSetup(false);
+  }, [activeGame?.id, activeGame?.status]);
 
   useEffect(() => {
     if (!supabase || !profile.id) return;
@@ -202,6 +208,7 @@ export function OnlinePlayPage({
     }
     setOnlineGames((current) => [data as OnlineGameRow, ...current]);
     setSelectedId(data.id);
+    setShowSetup(true);
     setMessage(`Einladung an ${selectedPlayer.username} gesendet. Die Farbe wurde zufällig vergeben.`);
   }
 
@@ -214,27 +221,34 @@ export function OnlinePlayPage({
     if (error) setMessage(error.message);
     else {
       setSelectedId(game.id);
+      setShowSetup(false);
       await refreshGames();
     }
   }
 
   if (!supabase || !profile.id) {
     return (
-      <section className="premium-panel online-offline">
-        <Gamepad2 size={28} />
-        <h1>Online spielen benötigt Cloud-Sync</h1>
-        <p>Du bist aktuell im lokalen Modus. Sobald Supabase erreichbar und dein Profil verbunden ist, werden Spielersuche, Einladungen und Live-Züge aktiviert.</p>
-      </section>
+      <div className="play-mode-page">
+        <PlayModeGrid selected="5+0" disabled onSelect={() => undefined} />
+        <section className="premium-panel online-offline">
+          <Gamepad2 size={28} />
+          <h1>Online spielen benötigt Cloud-Sync</h1>
+          <p>Du bist aktuell im lokalen Modus. Sobald Supabase erreichbar und dein Profil verbunden ist, werden Spielersuche, Einladungen und Live-Züge aktiviert.</p>
+        </section>
+      </div>
     );
   }
 
   return (
-    <div className="online-layout">
+    <div className={gameInFocus ? "online-game-focus" : "online-layout"}>
+      {!gameInFocus && (
       <section className="online-lobby premium-panel">
         <div className="section-heading">
           <div><p className="eyebrow">Live Arena</p><h1>Online spielen</h1></div>
           <span className="status-chip"><Radio size={14} /> Realtime</span>
         </div>
+
+        <PlayModeGrid selected={timeControl} onSelect={(value) => { setTimeControl(value); setMessage(""); }} />
 
         {invitations.length > 0 && (
           <div className="invitation-stack">
@@ -272,21 +286,51 @@ export function OnlinePlayPage({
         <div className="game-list">
           <h2>Deine Online-Partien</h2>
           {onlineGames.map((game) => (
-            <button type="button" key={game.id} className={activeGame?.id === game.id ? "selected" : ""} onClick={() => setSelectedId(game.id)}>
+            <button type="button" key={game.id} className={activeGame?.id === game.id ? "selected" : ""} onClick={() => { setSelectedId(game.id); setShowSetup(game.status === "waiting"); }}>
               <Users size={17} /><span><strong>{opponentName(game, profile.id)}</strong><small>{statusLabel(game.status)} · {game.time_control}</small></span>
             </button>
           ))}
         </div>
       </section>
+      )}
 
+      {gameInFocus && (
       <section className="online-board-area">
         {activeGame ? (
-          <LiveBoard game={activeGame} profile={profile} settings={settings} serverOffsetMs={serverOffsetMs} onUpdated={refreshGames} onOpenAnalysis={() => onOpenGame(activeGame.id)} />
+          <LiveBoard
+            game={activeGame}
+            profile={profile}
+            settings={settings}
+            serverOffsetMs={serverOffsetMs}
+            onUpdated={refreshGames}
+            onOpenAnalysis={() => onOpenGame(activeGame.id)}
+            onBackToLobby={() => setShowSetup(true)}
+            onNewGame={() => { setSelectedId(null); setShowSetup(true); setMessage(""); }}
+          />
         ) : (
           <div className="premium-panel online-empty"><Gamepad2 size={32} /><h2>Bereit für eine Partie?</h2><p>Suche links nach einem echten FranChess-Profil und sende eine Einladung.</p></div>
         )}
       </section>
+      )}
     </div>
+  );
+}
+
+function PlayModeGrid({ selected, onSelect, disabled = false }: { selected: string; onSelect: (value: string) => void; disabled?: boolean }) {
+  const modes = [
+    { title: "Rapid", detail: "10 min", value: "10+0", icon: <Timer size={28} />, tone: "blue" },
+    { title: "Blitz", detail: "5 min", value: "5+0", icon: <Zap size={30} />, tone: "gold" },
+    { title: "Bullet", detail: "1 min", value: "1+0", icon: <Rocket size={29} />, tone: "red" },
+    { title: "Daily", detail: "Noch nicht verfügbar", value: "daily", icon: <CalendarDays size={28} />, tone: "green", unavailable: true }
+  ];
+  return (
+    <section className="play-mode-section">
+      <div className="play-mode-heading"><div><p className="eyebrow">Spielmodus</p><h2>Wähle dein Tempo</h2></div><span>{disabled ? "Offline" : "Online"}</span></div>
+      <div className="play-mode-grid">
+        {modes.map((mode) => <button type="button" key={mode.title} disabled={disabled || mode.unavailable} className={`play-mode-card tone-${mode.tone} ${selected === mode.value ? "selected" : ""}`} onClick={() => onSelect(mode.value)}><span><strong>{mode.title}</strong><small>{mode.detail}</small></span><i>{mode.icon}</i></button>)}
+      </div>
+      <button type="button" className="custom-game-card" disabled={disabled} onClick={() => onSelect("15+10")}><span><Settings2 size={22} /></span><span><strong>Custom Game</strong><small>Zeitkontrolle unten individuell wählen</small></span><span>15+10</span></button>
+    </section>
   );
 }
 
@@ -418,14 +462,33 @@ function LegacyLiveBoard({ game, profile, settings, onUpdated, onOpenAnalysis }:
   );
 }
 
-function LiveBoard({ game, profile, settings, serverOffsetMs, onUpdated, onOpenAnalysis }: { game: OnlineGameRow; profile: CoachUserProfile; settings: AppSettings; serverOffsetMs: number; onUpdated: () => Promise<void>; onOpenAnalysis: () => void }) {
-  const board = useResponsiveBoardWidth(620);
+function LiveBoard({
+  game,
+  profile,
+  settings,
+  serverOffsetMs,
+  onUpdated,
+  onOpenAnalysis,
+  onBackToLobby,
+  onNewGame
+}: {
+  game: OnlineGameRow;
+  profile: CoachUserProfile;
+  settings: AppSettings;
+  serverOffsetMs: number;
+  onUpdated: () => Promise<void>;
+  onOpenAnalysis: () => void;
+  onBackToLobby: () => void;
+  onNewGame: () => void;
+}) {
+  const board = useResponsiveBoardWidth(600);
   const maxPly = game.move_history?.length ?? 0;
   const [currentPly, setCurrentPly] = useState(maxPly);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [tick, setTick] = useState(Date.now());
   const [evaluation, setEvaluation] = useState<{ cp: number | null; mate: number | null }>({ cp: null, mate: null });
   const [actionMessage, setActionMessage] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
   const previousMaxPly = useRef(maxPly);
   const timeoutClaimed = useRef(false);
@@ -600,7 +663,27 @@ function LiveBoard({ game, profile, settings, serverOffsetMs, onUpdated, onOpenA
       </div>
       <PlayerClock name={orientation === "white" ? game.white_username : game.black_username} value={orientation === "white" ? clocks.white : clocks.black} active={game.status === "active" && liveChess.turn() === (orientation === "white" ? "w" : "b")} />
       <div className="online-moves premium-panel">
-        <div className="section-heading"><h3>Zugverlauf</h3><span>{maxPly} Halbzüge</span></div>
+        <div className="section-heading">
+          <div><h3>Zugverlauf</h3><span>{maxPly} Halbzüge</span></div>
+          <div className="online-menu-wrap">
+            <button type="button" className="online-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Spielmenü öffnen">
+              <MoreVertical size={18} />
+            </button>
+            {menuOpen && (
+              <div className="online-game-menu">
+                {game.status === "active" && (
+                  <>
+                    <button type="button" onClick={() => { setMenuOpen(false); void offerOrAcceptDraw(); }} disabled={ownDrawOffer}><Handshake size={15} />{opponentOfferedDraw ? "Remis annehmen" : ownDrawOffer ? "Remis angeboten" : "Remis anbieten"}</button>
+                    <button type="button" onClick={() => { setMenuOpen(false); void resign(); }}><Flag size={15} />Aufgeben</button>
+                  </>
+                )}
+                {game.status === "finished" && <button type="button" onClick={() => { setMenuOpen(false); onOpenAnalysis(); }}>Partie analysieren</button>}
+                <button type="button" onClick={() => { setMenuOpen(false); onBackToLobby(); }}>Zurück zur Lobby</button>
+                {game.status === "finished" && <button type="button" onClick={() => { setMenuOpen(false); onNewGame(); }}>Neue Partie</button>}
+              </div>
+            )}
+          </div>
+        </div>
         <div className="online-controls-desktop"><BoardControls current={currentPly} max={maxPly} onChange={setPly} /></div>
         <div className="move-strip">{game.move_history?.map((move, index) => <button type="button" className={currentPly === index + 1 ? "selected" : ""} onClick={() => setPly(index + 1)} key={`${move.san}-${index}`}>{Math.floor(index / 2) + 1}{index % 2 ? "..." : "."} {move.san}</button>)}</div>
         {game.status === "waiting" && <p>Einladung gesendet. Die Uhr startet erst, wenn der zweite Spieler beitritt.</p>}
@@ -608,13 +691,13 @@ function LiveBoard({ game, profile, settings, serverOffsetMs, onUpdated, onOpenA
         {opponentOfferedDraw && <p className="draw-notice">Dein Gegner bietet Remis an.</p>}
         {ownDrawOffer && <p className="draw-notice">Remisangebot gesendet. Es bleibt bis zum nächsten Zug offen.</p>}
         {actionMessage && <p className="online-action-message">{actionMessage}</p>}
-        {game.status === "active" && (
-          <div className="online-game-actions">
-            <ActionButton variant="quiet" onClick={() => void offerOrAcceptDraw()} disabled={ownDrawOffer} icon={<Handshake size={16} />}>{opponentOfferedDraw ? "Remis annehmen" : ownDrawOffer ? "Remis angeboten" : "Remis anbieten"}</ActionButton>
-            <ActionButton variant="quiet" onClick={() => void resign()} icon={<Flag size={16} />}>Aufgeben</ActionButton>
+        {game.status === "finished" && (
+          <div className="online-end-actions">
+            <ActionButton onClick={onOpenAnalysis}>Partie analysieren</ActionButton>
+            <ActionButton variant="quiet" onClick={onNewGame}>Neue Partie</ActionButton>
+            <ActionButton variant="quiet" onClick={onBackToLobby}>Zurück zur Lobby</ActionButton>
           </div>
         )}
-        {game.status === "finished" && <ActionButton onClick={onOpenAnalysis}>Partie analysieren</ActionButton>}
       </div>
     </div>
   );

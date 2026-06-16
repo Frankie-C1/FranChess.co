@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BarChart3, Brain, Download, Eye, Gamepad2, Play, Settings, Upload } from "lucide-react";
+import { BarChart3, Brain, Crown, Download, Eye, Gamepad2, Home, Settings, Upload } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { BrandLogo } from "./components/BrandLogo";
 import { Layout } from "./components/Layout";
@@ -21,13 +21,13 @@ import { isSupabaseConfigured, supabase } from "./lib/storage/supabase";
 import type { CloudSyncState, CoachUserProfile, CoachView, StoredGame } from "./types";
 
 const nav = [
-  { id: "home", label: "Start", icon: Activity },
-  { id: "online", label: "Online spielen", icon: Gamepad2 },
-  { id: "upload", label: "Upload", icon: Upload },
-  { id: "dashboard", label: "Übersicht", icon: BarChart3 },
+  { id: "home", label: "Home", icon: Home },
+  { id: "online", label: "Spielen", icon: Gamepad2 },
+  { id: "play", label: "Coach", icon: Crown },
   { id: "viewer", label: "Analyse", icon: Eye },
-  { id: "play", label: "Coach", icon: Play },
+  { id: "dashboard", label: "Übersicht", icon: BarChart3 },
   { id: "training", label: "Training", icon: Brain },
+  { id: "upload", label: "Partien", icon: Upload },
   { id: "export", label: "Export", icon: Download },
   { id: "settings", label: "Einstellungen", icon: Settings }
 ] satisfies Array<{ id: CoachView; label: string; icon: LucideIcon }>;
@@ -297,7 +297,7 @@ export default function App() {
       pendingInvitation={pendingInvitation}
       onOpenInvitation={() => navigate("online")}
     >
-      {view === "home" && <HomePage onNavigate={navigate} games={games} />}
+      {view === "home" && <HomePage onNavigate={navigate} games={games} username={profile.username ?? "Spieler"} />}
       {view === "online" && <OnlinePlayPage profile={profile} settings={settings} games={games} onGamesChange={updateGames} onOpenGame={openGame} />}
       {view === "upload" && <UploadPage games={games} onGamesChange={updateGames} onOpenGame={openGame} onToggleFavorite={toggleFavorite} />}
       {view === "dashboard" && <DashboardPage games={games} onNavigate={setView} />}

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { BookOpen, Brain, CheckCircle2, FileText, Puzzle, Target, Upload, XCircle } from "lucide-react";
+import { BookOpen, Brain, CheckCircle2, ChevronRight, FileText, GraduationCap, Puzzle, Target, Upload, XCircle } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
+import { CapturedMaterialDisplay } from "../components/CapturedMaterialDisplay";
 import { useResponsiveBoardWidth } from "../components/useResponsiveBoardWidth";
 import { boardColorsFor, buildSquareStyles, pieceColorAt } from "../lib/chess/boardUi";
 import type { AppSettings, StoredGame, TrainingTask } from "../types";
@@ -73,14 +74,15 @@ export function TrainingPage({
   const tasks = useMemo(() => buildTasks(games), [games]);
 
   return (
-    <div className="grid gap-5">
-      <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+    <div className={`training-page grid gap-5 ${area === "puzzles" ? "training-page-puzzles" : ""}`}>
+      <section className="training-hero premium-panel">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-medium text-[var(--color-muted)]">Training</p>
-            <h1 className="mt-1 text-2xl font-semibold">Üben aus echten Stellungen</h1>
+            <p className="eyebrow">FranChess Academy</p>
+            <h1>Training</h1>
+            <p>Arbeite mit Taktik aus eigenen Partien, kuratierten Puzzles und deinem Eröffnungsrepertoire.</p>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="training-tabs">
             <AreaButton icon={<Target size={17} />} active={area === "training"} label="Training" onClick={() => setArea("training")} />
             <AreaButton icon={<Puzzle size={17} />} active={area === "puzzles"} label="Puzzles" onClick={() => setArea("puzzles")} />
             <AreaButton icon={<BookOpen size={17} />} active={area === "openings"} label="Eröffnungen" onClick={() => setArea("openings")} />
@@ -88,10 +90,33 @@ export function TrainingPage({
         </div>
       </section>
 
-      {area === "training" && <TrainingTasks tasks={tasks} onUpload={onUpload} onSelectGame={onSelectGame} />}
+      {area === "training" && <div className="training-content"><TrainingOverview taskCount={tasks.length} onSelect={setArea} /><TrainingTasks tasks={tasks} onUpload={onUpload} onSelectGame={onSelectGame} /></div>}
       {area === "puzzles" && <PuzzleTrainer settings={settings} />}
       {area === "openings" && <OpeningTrainer settings={settings} />}
     </div>
+  );
+}
+
+function TrainingOverview({ taskCount, onSelect }: { taskCount: number; onSelect: (area: TrainingArea) => void }) {
+  return (
+    <section className="training-course-list">
+      <button type="button" className="training-course-card" onClick={() => onSelect("training")}>
+        <span className="course-icon course-icon-purple"><Brain size={25} /></span>
+        <span><strong>Taktik aus deinen Partien</strong><small>{taskCount ? `${taskCount} Aufgaben verfügbar` : "Entsteht nach deiner ersten Analyse"}</small></span>
+        <span className="course-progress">{taskCount ? "Bereit" : "Start"}</span><ChevronRight size={19} />
+      </button>
+      <button type="button" className="training-course-card" onClick={() => onSelect("puzzles")}>
+        <span className="course-icon course-icon-blue"><Puzzle size={25} /></span>
+        <span><strong>Puzzles</strong><small>Taktische Motive nach Thema und Wertung</small></span>
+        <span className="course-progress">Trainieren</span><ChevronRight size={19} />
+      </button>
+      <button type="button" className="training-course-card" onClick={() => onSelect("openings")}>
+        <span className="course-icon course-icon-green"><BookOpen size={25} /></span>
+        <span><strong>Eröffnungen</strong><small>Repertoire importieren und Zugfolgen wiederholen</small></span>
+        <span className="course-progress">Lernen</span><ChevronRight size={19} />
+      </button>
+      <div className="training-course-note"><GraduationCap size={18} /><span>Alle Bereiche verwenden nur vorhandene FranChess-Daten und echte Trainingsfunktionen.</span></div>
+    </section>
   );
 }
 
@@ -157,8 +182,9 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [boardVersion, setBoardVersion] = useState(0);
   const [solvedOverlay, setSolvedOverlay] = useState(false);
-  const board = useResponsiveBoardWidth(420);
-  const orientation = game.turn() === "b" ? "black" : "white";
+  const [puzzleOrientation, setPuzzleOrientation] = useState<"white" | "black">("white");
+  const board = useResponsiveBoardWidth(600);
+  const orientation = puzzleOrientation;
   const boardColors = useMemo(
     () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
     [settings.boardTheme, settings.colorTheme, settings.darkMode]
@@ -248,6 +274,7 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
         const opponentMove = next.move({ from: firstMove.slice(0, 2), to: firstMove.slice(2, 4), promotion: firstMove[4] || "q" });
         if (!opponentMove) throw new Error("invalid-start-move");
       }
+      setPuzzleOrientation(next.turn() === "b" ? "black" : "white");
       setGame(next);
       setSolutionIndex(1);
       setStatus("idle");
@@ -292,14 +319,13 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   }
 
   function onPuzzleDrop(from: Square, to: Square) {
-    if (!activePuzzle || solvedOverlay) return false;
+    if (!activePuzzle || status === "solved") return false;
     const expected = activePuzzle.moves[solutionIndex];
     const played = `${from}${to}`;
     const promotion = expected?.[4] ?? "q";
     if (!expected || !expected.startsWith(played)) {
       setStatus("wrong");
       setSelectedSquare(null);
-      setBoardVersion((value) => value + 1);
       setMessage("Nicht korrekt. Die Figur springt zurück.");
       return false;
     }
@@ -314,7 +340,6 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
     if (!userMove) {
       setStatus("wrong");
       setSelectedSquare(null);
-      setBoardVersion((value) => value + 1);
       setMessage("Illegaler Zug.");
       return false;
     }
@@ -341,14 +366,13 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
       setSolvedOverlay(true);
       window.setTimeout(() => {
         setSolvedOverlay(false);
-        setActivePuzzleId(null);
-      }, 1500);
+      }, 1300);
     }
     return true;
   }
 
   function onPuzzleSquareClick(square: Square) {
-    if (solvedOverlay) return;
+    if (status === "solved") return;
     if (selectedSquare) {
       const targetColor = pieceColorAt(game.fen(), square);
       const selectedColor = pieceColorAt(game.fen(), selectedSquare);
@@ -373,35 +397,48 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
   if (loadState === "error") return <Panel title="Puzzle-Daten konnten nicht geladen werden" text="Prüfe public/data/puzzles.json oder importiere die CSV erneut." />;
 
   return (
-    <section className="grid gap-5 lg:grid-cols-[minmax(320px,460px)_1fr]">
-      <div ref={board.ref} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
-        <div className="board-touch-area relative flex justify-center overflow-hidden">
-          <Chessboard
-            key={`puzzle-${boardVersion}`}
-            id="franchess-puzzle"
-            position={game.fen()}
-            boardWidth={board.width}
-            boardOrientation={orientation}
-            onPieceDrop={(from, to) => onPuzzleDrop(from as Square, to as Square)}
-            onSquareClick={(square) => onPuzzleSquareClick(square as Square)}
-            isDraggablePiece={({ sourceSquare }) => !solvedOverlay && pieceColorAt(game.fen(), sourceSquare as Square) === game.turn()}
-            customSquareStyles={squareStyles}
-            customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
-            customLightSquareStyle={{ backgroundColor: boardColors.light }}
-            animationDuration={160}
-            autoPromoteToQueen
-          />
-          {solvedOverlay && (
-            <div className="absolute inset-0 grid place-items-center rounded-md bg-[var(--color-surface)]/85 backdrop-blur-sm">
-              <div className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3 text-lg font-semibold text-[var(--color-text)] shadow-lg">
-                <CheckCircle2 size={22} className="text-[var(--color-accent)]" />
-                Gelöst
+    <section className="puzzle-workspace">
+      <div className="puzzle-board-column">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
+          <div className="puzzle-board-grid">
+            <div className="puzzle-eval-spacer" aria-hidden="true" />
+            <div ref={board.ref} className="board-touch-area relative flex aspect-square w-full max-w-full justify-center justify-self-center overflow-hidden">
+              <div className="board-stage" style={{ width: board.width, height: board.width }}>
+                <Chessboard
+                  key={`puzzle-${boardVersion}`}
+                  id="franchess-puzzle"
+                  position={game.fen()}
+                  boardWidth={board.width}
+                  boardOrientation={orientation}
+                  onPieceDrop={(from, to) => onPuzzleDrop(from as Square, to as Square)}
+                  onSquareClick={(square) => onPuzzleSquareClick(square as Square)}
+                  isDraggablePiece={({ sourceSquare }) => status !== "solved" && pieceColorAt(game.fen(), sourceSquare as Square) === game.turn()}
+                  customSquareStyles={squareStyles}
+                  customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+                  customLightSquareStyle={{ backgroundColor: boardColors.light }}
+                  animationDuration={160}
+                  autoPromoteToQueen
+                />
+                {solvedOverlay && (
+                  <div className="absolute inset-0 grid place-items-center rounded-md bg-[var(--color-surface)]/85 backdrop-blur-sm">
+                    <div className="inline-flex items-center gap-2 rounded-md border border-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3 text-lg font-semibold text-[var(--color-text)] shadow-lg">
+                      <CheckCircle2 size={22} className="text-[var(--color-accent)]" />
+                      Gelöst
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+            <div className="hidden board-inline-material md:block">
+              <CapturedMaterialDisplay fen={game.fen()} orientation={orientation} layout="side" />
+            </div>
+          </div>
+          <div className="mt-3 md:hidden">
+            <CapturedMaterialDisplay fen={game.fen()} orientation={orientation} />
+          </div>
         </div>
       </div>
-      <div className="grid content-start gap-4">
+      <div className="puzzle-panel-column grid content-start gap-4">
         <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -439,7 +476,7 @@ function PuzzleTrainer({ settings }: { settings: AppSettings }) {
               Alle verfügbaren Puzzles wurden bereits gespielt.
             </p>
           )}
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <ActionButton variant="quiet" onClick={() => activePuzzle && startPuzzle(activePuzzle)}>Neu starten</ActionButton>
             <ActionButton variant="quiet" onClick={revealSolution}>Lösung anzeigen</ActionButton>
             <ActionButton onClick={() => {

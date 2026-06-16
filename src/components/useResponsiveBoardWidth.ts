@@ -14,17 +14,22 @@ export function useResponsiveBoardWidth(maxWidth = 392) {
       const horizontalPadding = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
       const contentWidth = rect.width - horizontalPadding;
       const viewportWidth = window.innerWidth - 24;
-      setWidth(Math.max(240, Math.min(maxWidth, Math.floor(contentWidth), viewportWidth)));
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const heightReserve = window.innerWidth >= 1180 ? 126 : window.innerWidth >= 768 ? 170 : 118;
+      const viewportHeightLimit = viewportHeight - heightReserve;
+      setWidth(Math.max(240, Math.min(maxWidth, Math.floor(contentWidth), viewportWidth, viewportHeightLimit)));
     };
 
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
     window.addEventListener("orientationchange", update);
+    window.visualViewport?.addEventListener("resize", update);
 
     return () => {
       observer.disconnect();
       window.removeEventListener("orientationchange", update);
+      window.visualViewport?.removeEventListener("resize", update);
     };
   }, [element, maxWidth]);
 

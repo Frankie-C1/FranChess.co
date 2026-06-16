@@ -201,7 +201,7 @@ export function SettingsPage({
         </div>
       </SettingsSection>
 
-      <SettingsSection icon={<LogOut size={19} />} title="Benutzerkonto">
+      <SettingsSection id="settings-account" icon={<LogOut size={19} />} title="Benutzerkonto">
         <button
           type="button"
           onClick={onLogout}
@@ -283,9 +283,9 @@ export function SettingsPage({
   }
 }
 
-function SettingsSection({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+function SettingsSection({ id, icon, title, children }: { id?: string; icon: ReactNode; title: string; children: ReactNode }) {
   return (
-    <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+    <section id={id} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <span className="grid h-9 w-9 place-items-center rounded-md bg-[var(--color-surface-2)] text-[var(--color-text)]">{icon}</span>
         <h1 className="text-lg font-semibold">{title}</h1>

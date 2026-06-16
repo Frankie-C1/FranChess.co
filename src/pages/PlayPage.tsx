@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { Lightbulb, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { Crown, Lightbulb, RotateCcw, SlidersHorizontal, Undo2, UserRound } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
 import { BoardControls } from "../components/BoardControls";
+import { BoardMoveBadge } from "../components/BoardMoveBadge";
 import { CapturedMaterialDisplay } from "../components/CapturedMaterialDisplay";
 import { EvaluationBar } from "../components/EvaluationBar";
 import { MoveJudgementBadge } from "../components/MoveJudgementBadge";
@@ -53,7 +54,7 @@ export function PlayPage({
   const [boardVersion, setBoardVersion] = useState(0);
   const [lastUserEntry, setLastUserEntry] = useState<CoachHistoryEntry | null>(null);
   const [lastCoachReply, setLastCoachReply] = useState<CoachHistoryEntry | null>(null);
-  const board = useResponsiveBoardWidth(settings.coachSettingsCollapsed ? 500 : 400);
+  const board = useResponsiveBoardWidth(680);
   const profile = useMemo(() => buildCoachProfile(games), [games]);
   const current = history[currentPly] ?? history[history.length - 1];
   const position = current.fen;
@@ -219,6 +220,24 @@ export function PlayPage({
     }
   }
 
+  function undoLastTurn() {
+    if (isThinking || history.length <= 1) return;
+    let userPly = Math.min(currentPly || history.length - 1, history.length - 1);
+    while (userPly > 0 && history[userPly]?.by !== "user") userPly -= 1;
+    if (history[userPly]?.by !== "user") return;
+
+    const next = history.slice(0, userPly);
+    const nextPly = Math.max(0, next.length - 1);
+    setHistory(next);
+    setCurrentPly(nextPly);
+    setSelectedSquare(null);
+    setSuggestions([]);
+    setLastUserEntry([...next].reverse().find((entry) => entry.by === "user") ?? null);
+    setLastCoachReply([...next].reverse().find((entry) => entry.by === "coach") ?? null);
+    setCoachNote("Zug zurückgenommen. Spiele von dieser Stellung einen neuen legalen Zug.");
+    setDetailNote("Die bisherige Fortsetzung wurde entfernt. Stockfish antwortet nach deinem neuen Zug normal weiter.");
+  }
+
   async function suggestMoves() {
     setIsSuggesting(true);
     setSuggestionError("");
@@ -238,8 +257,14 @@ export function PlayPage({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(430px,570px)_minmax(300px,1fr)]">
-      <section className="grid gap-3">
+    <div className="coach-workspace">
+      <aside className="board-player-rail premium-panel">
+        <div className="player-rail-card"><span><Crown size={18} /></span><div><small>Coach</small><strong>Stockfish</strong><em>{settings.engineElo === "max" ? "Maximal" : `${settings.engineElo} Elo`}</em></div></div>
+        <CapturedMaterialDisplay fen={position} orientation={orientation} />
+        <div className="player-rail-card"><span><UserRound size={18} /></span><div><small>Du spielst</small><strong>{playerColor === "w" ? "Weiß" : "Schwarz"}</strong><em>{atLatest ? "Aktuelle Stellung" : `Zug ${currentPly}`}</em></div></div>
+      </aside>
+
+      <section className="coach-board-column grid gap-3">
         <div className="hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm font-medium text-[var(--color-text)]">
           {isThinking ? "Coach denkt ..." : coachNote}
           {!atLatest && <p className="mt-1 text-xs text-[var(--color-muted)]">Du bist in einer früheren Stellung. Ein neuer Zug startet ab hier eine neue Linie.</p>}
@@ -248,7 +273,8 @@ export function PlayPage({
           <div className="grid grid-cols-[32px_minmax(0,1fr)] items-stretch gap-3 overflow-hidden md:grid-cols-[36px_minmax(0,1fr)_48px]">
             <EvaluationBar cp={current.cp} mate={current.mate} />
             <div ref={board.ref} className="board-touch-area flex aspect-square w-full max-w-full justify-center justify-self-center overflow-hidden">
-              <Chessboard
+              <div className="board-stage" style={{ width: board.width, height: board.width }}>
+                <Chessboard
                 key={`coach-${boardVersion}`}
                 id="franchess-play"
                 position={position}
@@ -264,9 +290,11 @@ export function PlayPage({
                 animationDuration={180}
                 customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
                 customLightSquareStyle={{ backgroundColor: boardColors.light }}
-              />
+                />
+                <BoardMoveBadge judgement={current.judgement} uci={current.uci} orientation={orientation} />
+              </div>
             </div>
-            <div className="hidden md:block">
+            <div className="hidden board-inline-material md:block">
               <CapturedMaterialDisplay fen={position} orientation={orientation} layout="side" />
             </div>
           </div>
@@ -279,7 +307,7 @@ export function PlayPage({
         </div>
       </section>
 
-      <section className="grid content-start gap-4">
+      <section className="coach-panel-column grid content-start gap-4">
         <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-2xl font-semibold">Gegen Coach spielen</h1>
@@ -350,6 +378,9 @@ export function PlayPage({
           </p>
 
           <div className="mt-4 flex flex-wrap gap-3">
+            <ActionButton variant="quiet" onClick={undoLastTurn} disabled={isThinking || history.length <= 1} icon={<Undo2 size={16} />}>
+              Zug zurücknehmen
+            </ActionButton>
             <ActionButton variant="quiet" onClick={() => reset()} icon={<RotateCcw size={16} />}>
               Neu starten
             </ActionButton>

@@ -4,6 +4,7 @@ import { Chessboard } from "react-chessboard";
 import { Cpu, HelpCircle, Lightbulb, ListPlus, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { ActionButton } from "../components/ActionButton";
 import { BoardControls } from "../components/BoardControls";
+import { BoardMoveBadge } from "../components/BoardMoveBadge";
 import { CapturedMaterialDisplay } from "../components/CapturedMaterialDisplay";
 import { EmptyState } from "../components/EmptyState";
 import { EvalGraph } from "../components/EvalGraph";
@@ -52,7 +53,7 @@ export function ViewerPage({
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<GameSortOrder>("desc");
   const [playerSearch, setPlayerSearch] = useState("");
-  const board = useResponsiveBoardWidth(panelCollapsed ? 620 : 500);
+  const board = useResponsiveBoardWidth(680);
   const boardColors = useMemo(
     () => boardColorsFor(settings.boardTheme, settings.colorTheme, settings.darkMode),
     [settings.boardTheme, settings.colorTheme, settings.darkMode]
@@ -186,16 +187,16 @@ export function ViewerPage({
   }
 
   return (
-    <div className={panelCollapsed ? "grid gap-5 xl:grid-cols-[minmax(540px,760px)_320px]" : "grid gap-5 xl:grid-cols-[minmax(520px,680px)_minmax(360px,1fr)]"}>
-      <section className="grid content-start gap-4">
-        <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+    <div className={`analysis-workspace ${panelCollapsed ? "panel-collapsed" : ""}`}>
+      <aside className="viewer-tool-rail premium-panel">
+        <div className="viewer-tool-section">
           <div className="mb-3 flex items-center justify-between gap-3">
             <span className="text-sm font-semibold">Partie</span>
-            <ActionButton className="hidden md:inline-flex" variant="quiet" onClick={() => setPanelCollapsed((value) => !value)} icon={<SlidersHorizontal size={16} />}>
+            <ActionButton className="viewer-panel-toggle hidden md:inline-flex" variant="quiet" onClick={() => setPanelCollapsed((value) => !value)} icon={<SlidersHorizontal size={16} />}>
               {panelCollapsed ? "Panel anzeigen" : "Panel einklappen"}
             </ActionButton>
           </div>
-          <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+          <div className="viewer-game-filters">
             <input
               value={playerSearch}
               onChange={(event) => setPlayerSearch(event.target.value)}
@@ -226,48 +227,10 @@ export function ViewerPage({
           </select>
         </div>
 
-        <div className="rounded-md border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-          <div className="grid grid-cols-[32px_minmax(0,1fr)] items-stretch gap-3 overflow-hidden md:grid-cols-[36px_minmax(0,1fr)_48px]">
-            <EvaluationBar cp={currentEval.cp} mate={currentEval.mate} />
-            <div ref={board.ref} className="board-touch-area flex aspect-square w-full max-w-full justify-center justify-self-center overflow-hidden">
-              <Chessboard
-                key={`viewer-${boardVersion}`}
-                id="franchess-viewer"
-                position={position}
-                boardWidth={board.width}
-                onPieceDrop={handleDrop}
-                onSquareClick={(square) => handleSquareClick(square as Square)}
-                isDraggablePiece={({ sourceSquare }) => canSelectPiece(position, sourceSquare as Square, settings.allowOpponentMoves)}
-                customSquareStyles={squareStyles}
-                customArrows={arrows}
-                areArrowsAllowed={false}
-                autoPromoteToQueen
-                animationDuration={180}
-                customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
-                customLightSquareStyle={{ backgroundColor: boardColors.light }}
-              />
-            </div>
-            <div className="hidden md:block">
-              <CapturedMaterialDisplay fen={position} orientation="white" layout="side" />
-            </div>
-          </div>
-          <div className="mt-3 md:hidden">
-            <CapturedMaterialDisplay fen={position} orientation="white" />
-          </div>
-          <div className="md:hidden">
-            <BoardControls current={activePly} max={maxPly} onChange={setPly} />
-          </div>
-          {variant && (
-            <div className="mt-3 w-full rounded-md bg-[#eef6ea] p-3 text-sm text-[#3f6b2e] dark:bg-[#1f3320] dark:text-[#b8d9a8]">
-              Variante ab Zug {variant.fromPly + 1}: {variant.moves.join(" ")}
-              <button type="button" className="ml-3 font-semibold underline" onClick={() => setVariant(null)}>
-                Hauptvariante
-              </button>
-            </div>
-          )}
-        </div>
+        <div className="viewer-tool-divider" />
 
-        <div className="rounded-md border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+        <div className="viewer-tool-section">
+          <p className="mb-3 text-sm font-semibold">Analyse</p>
           <div className="grid grid-cols-3 gap-2">
             {(["quick", "normal", "deep"] as AnalysisDepth[]).map((value) => (
               <button type="button" key={value} onClick={() => setDepth(value)} className={segment(depth === value)}>
@@ -292,9 +255,55 @@ export function ViewerPage({
             Elo: {settings.engineElo === "max" ? "Maximal" : settings.engineElo} · MultiPV: {stockfishService.status.supportsMultiPv ? "aktiv" : "nicht bestätigt"}
           </p>
         </div>
+      </aside>
+
+      <section className="viewer-board-column">
+        <div className="rounded-md border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+          <div className="grid grid-cols-[32px_minmax(0,1fr)] items-stretch gap-3 overflow-hidden md:grid-cols-[36px_minmax(0,1fr)_48px]">
+            <EvaluationBar cp={currentEval.cp} mate={currentEval.mate} />
+            <div ref={board.ref} className="board-touch-area flex aspect-square w-full max-w-full justify-center justify-self-center overflow-hidden">
+              <div className="board-stage" style={{ width: board.width, height: board.width }}>
+                <Chessboard
+                key={`viewer-${boardVersion}`}
+                id="franchess-viewer"
+                position={position}
+                boardWidth={board.width}
+                onPieceDrop={handleDrop}
+                onSquareClick={(square) => handleSquareClick(square as Square)}
+                isDraggablePiece={({ sourceSquare }) => canSelectPiece(position, sourceSquare as Square, settings.allowOpponentMoves)}
+                customSquareStyles={squareStyles}
+                customArrows={arrows}
+                areArrowsAllowed={false}
+                autoPromoteToQueen
+                animationDuration={180}
+                customDarkSquareStyle={{ backgroundColor: boardColors.dark }}
+                customLightSquareStyle={{ backgroundColor: boardColors.light }}
+                />
+                <BoardMoveBadge judgement={variant ? null : judgement} uci={variant ? null : activeMove?.playedUci} />
+              </div>
+            </div>
+            <div className="hidden board-inline-material md:block">
+              <CapturedMaterialDisplay fen={position} orientation="white" layout="side" />
+            </div>
+          </div>
+          <div className="mt-3 md:hidden">
+            <CapturedMaterialDisplay fen={position} orientation="white" />
+          </div>
+          <div className="md:hidden">
+            <BoardControls current={activePly} max={maxPly} onChange={setPly} />
+          </div>
+          {variant && (
+            <div className="mt-3 w-full rounded-md bg-[#eef6ea] p-3 text-sm text-[#3f6b2e] dark:bg-[#1f3320] dark:text-[#b8d9a8]">
+              Variante ab Zug {variant.fromPly + 1}: {variant.moves.join(" ")}
+              <button type="button" className="ml-3 font-semibold underline" onClick={() => setVariant(null)}>
+                Hauptvariante
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
-      <section className="grid content-start gap-4">
+      <section className="viewer-analysis-panel grid content-start gap-4">
         {accuracy && <AccuracyPanel stats={accuracy} />}
         <div className="hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm md:block">
           <BoardControls current={activePly} max={maxPly} onChange={setPly} />

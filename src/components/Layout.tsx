@@ -27,6 +27,14 @@ export function Layout({ nav, view, onNavigate, layoutMode, profile, cloudState,
     setMenuOpen(false);
   }
 
+  function openAccountSettings() {
+    navigate("settings");
+    const scrollToAccount = () => document.getElementById("settings-account")?.scrollIntoView({ behavior: "auto", block: "center" });
+    window.setTimeout(scrollToAccount, 80);
+    window.setTimeout(scrollToAccount, 260);
+    window.setTimeout(scrollToAccount, 520);
+  }
+
   return (
     <div className={`app-shell ${forceTop ? "layout-top" : ""} ${forceBottom ? "layout-bottom" : ""}`}>
       <aside className="desktop-sidebar">
@@ -37,11 +45,11 @@ export function Layout({ nav, view, onNavigate, layoutMode, profile, cloudState,
         <nav className="sidebar-nav" aria-label="Hauptnavigation">
           {nav.map((item) => <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />)}
         </nav>
-        <div className="sidebar-profile">
+        <button type="button" className="sidebar-profile" onClick={openAccountSettings} aria-label="Profil und Abmelden öffnen">
           <span className="profile-avatar">{profile.username?.slice(0, 1).toUpperCase()}</span>
           <span className="profile-copy"><strong>{profile.username}</strong><small><CloudLabel state={cloudState} /></small></span>
           <ChevronRight size={17} />
-        </div>
+        </button>
       </aside>
 
       <div className="app-content">
@@ -73,7 +81,7 @@ export function Layout({ nav, view, onNavigate, layoutMode, profile, cloudState,
 
       {menuOpen && <button type="button" className="mobile-menu-backdrop" aria-label="Menü schließen" onClick={() => setMenuOpen(false)} />}
       <aside className={`mobile-menu ${menuOpen ? "open" : ""}`}>
-        <div className="mobile-menu-head"><div><p className="eyebrow">Navigation</p><h2>FranChess.co</h2></div><button type="button" onClick={() => setMenuOpen(false)}><X size={20} /></button></div>
+        <div className="mobile-menu-head"><div className="mobile-menu-brand"><BrandLogo size="sm" /><span><p className="eyebrow">Navigation</p><h2>FranChess.co</h2></span></div><button type="button" onClick={() => setMenuOpen(false)}><X size={20} /></button></div>
         <div className="mobile-profile-row"><span className="profile-avatar">{profile.username?.slice(0, 1).toUpperCase()}</span><span><strong>{profile.username}</strong><small><CloudLabel state={cloudState} /></small></span></div>
         <nav className="mobile-menu-nav">
           {nav.map((item) => <NavButton key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />)}

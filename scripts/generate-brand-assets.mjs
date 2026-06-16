@@ -1,211 +1,54 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 
-const source = "C:/Users/Francesco/Downloads/ChatGPT Image 8. Juni 2026, 14_33_14.png";
 const publicDir = join(process.cwd(), "public");
+const source = join(publicDir, "franchess-mark.svg");
 
-if (!existsSync(source)) {
-  throw new Error(`Logo source not found: ${source}`);
+async function mark(size, scale = 0.66) {
+  return sharp(source).resize({ width: Math.round(size * scale), height: Math.round(size * scale), fit: "contain" }).png().toBuffer();
 }
 
-const input = sharp(source).ensureAlpha();
-const metadata = await input.metadata();
-const width = metadata.width ?? 0;
-const height = metadata.height ?? 0;
-const raw = await input.raw().toBuffer();
-const pixels = new Uint8ClampedArray(raw);
-const visited = new Uint8Array(width * height);
-const remove = new Uint8Array(width * height);
-const queue = [];
-
-function index(x, y) {
-  return y * width + x;
+async function iconBuffer(size, scale = 0.66) {
+  const radius = Math.round(size * 0.22);
+  const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${radius}" fill="#0c1017"/><circle cx="${Math.round(size * .76)}" cy="${Math.round(size * .2)}" r="${Math.round(size * .3)}" fill="#8faa52" opacity=".22"/></svg>`);
+  return sharp(background).composite([{ input: await mark(size, scale), gravity: "center" }]).png().toBuffer();
 }
 
-function offset(x, y) {
-  return index(x, y) * 4;
+async function saveIcon(filename, size, scale = 0.66) {
+  await sharp(await iconBuffer(size, scale)).toFile(join(publicDir, filename));
 }
 
-function isBackground(x, y) {
-  const i = offset(x, y);
-  const r = pixels[i];
-  const g = pixels[i + 1];
-  const b = pixels[i + 2];
-  const min = Math.min(r, g, b);
-  const max = Math.max(r, g, b);
-  return min > 218 && max - min < 24;
-}
-
-function addPoint(x, y) {
-  if (x < 0 || y < 0 || x >= width || y >= height) return;
-  const key = index(x, y);
-  if (visited[key]) return;
-  visited[key] = 1;
-  if (isBackground(x, y)) {
-    remove[key] = 1;
-    queue.push([x, y]);
-  }
-}
-
-for (let x = 0; x < width; x += 1) {
-  addPoint(x, 0);
-  addPoint(x, height - 1);
-}
-for (let y = 0; y < height; y += 1) {
-  addPoint(0, y);
-  addPoint(width - 1, y);
-}
-
-const dirs = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1]
-];
-
-for (let cursor = 0; cursor < queue.length; cursor += 1) {
-  const [x, y] = queue[cursor];
-  for (const [dx, dy] of dirs) addPoint(x + dx, y + dy);
-}
-
-for (let pass = 0; pass < 2; pass += 1) {
-  const next = new Uint8Array(width * height);
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const key = index(x, y);
-      if (remove[key] || !isBackground(x, y)) continue;
-      if (dirs.some(([dx, dy]) => remove[index(x + dx, y + dy)])) next[key] = 1;
-    }
-  }
-  for (let i = 0; i < remove.length; i += 1) {
-    if (next[i]) remove[i] = 1;
-  }
-}
-
-let minX = width;
-let minY = height;
-let maxX = 0;
-let maxY = 0;
-for (let y = 0; y < height; y += 1) {
-  for (let x = 0; x < width; x += 1) {
-    if (!remove[index(x, y)]) {
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  }
-}
-
-const pad = 22;
-minX = Math.max(0, minX - pad);
-minY = Math.max(0, minY - pad);
-maxX = Math.min(width - 1, maxX + pad);
-maxY = Math.min(height - 1, maxY + pad);
-
-for (let y = 0; y < height; y += 1) {
-  for (let x = 0; x < width; x += 1) {
-    if (remove[index(x, y)]) {
-      const i = offset(x, y);
-      pixels[i + 3] = 0;
-    }
-  }
-}
-
-const cropWidth = maxX - minX + 1;
-const cropHeight = maxY - minY + 1;
-const logoPng = await sharp(Buffer.from(pixels), {
-  raw: { width, height, channels: 4 }
-})
-  .extract({ left: minX, top: minY, width: cropWidth, height: cropHeight })
-  .png()
-  .toBuffer();
-
-await sharp(logoPng).png().toFile(join(publicDir, "franchess-logo.png"));
-
-async function saveIcon(filename, size, scale = 0.88) {
-  const target = Math.round(size * scale);
-  await sharp({
-    create: {
-      width: size,
-      height: size,
-      channels: 4,
-      background: { r: 255, g: 255, b: 255, alpha: 0 }
-    }
-  })
-    .composite([
-      {
-        input: await sharp(logoPng)
-          .resize({ width: target, height: target, fit: "inside" })
-          .png()
-          .toBuffer(),
-        gravity: "center"
-      }
-    ])
-    .png()
-    .toFile(join(publicDir, filename));
-}
-
-await saveIcon("favicon-16x16.png", 16);
-await saveIcon("favicon-32x32.png", 32);
-await saveIcon("favicon-48x48.png", 48);
+await saveIcon("franchess-logo.png", 512);
+await saveIcon("favicon-16x16.png", 16, 0.76);
+await saveIcon("favicon-32x32.png", 32, 0.74);
+await saveIcon("favicon-48x48.png", 48, 0.72);
 await saveIcon("apple-touch-icon.png", 180);
 await saveIcon("android-chrome-192x192.png", 192);
 await saveIcon("android-chrome-512x512.png", 512);
-await saveIcon("maskable-icon.png", 512, 0.72);
+await saveIcon("maskable-icon.png", 512, 0.56);
 
-await sharp({
-  create: {
-    width: 1200,
-    height: 630,
-    channels: 4,
-    background: "#f4f1ea"
-  }
-})
-  .composite([
-    {
-      input: await sharp(logoPng).resize({ width: 380, height: 380, fit: "inside" }).png().toBuffer(),
-      top: 62,
-      left: 410
-    },
-    {
-      input: Buffer.from(
-        `<svg width="1200" height="140" viewBox="0 0 1200 140" xmlns="http://www.w3.org/2000/svg"><text x="600" y="88" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="64" font-weight="700" fill="#1f2933">FranChess.co</text></svg>`
-      ),
-      top: 455,
-      left: 0
-    }
-  ])
-  .png()
-  .toFile(join(publicDir, "og-image.png"));
+const ogBackground = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#0c1017"/><circle cx="930" cy="80" r="380" fill="#8faa52" opacity=".13"/><text x="600" y="510" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="70" font-weight="700" fill="white">FranChess.co</text><text x="600" y="565" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="26" fill="#aeb7c4">Play. Analyze. Improve.</text></svg>');
+await sharp(ogBackground).composite([{ input: await mark(360, 0.82), top: 75, left: 420 }]).png().toFile(join(publicDir, "og-image.png"));
 
-const icoFrames = [
-  { size: 16, bytes: readFileSync(join(publicDir, "favicon-16x16.png")) },
-  { size: 32, bytes: readFileSync(join(publicDir, "favicon-32x32.png")) },
-  { size: 48, bytes: readFileSync(join(publicDir, "favicon-48x48.png")) }
-];
+const icoFrames = [16, 32, 48].map((size) => ({ size, bytes: readFileSync(join(publicDir, `favicon-${size}x${size}.png`)) }));
 const headerSize = 6 + icoFrames.length * 16;
-const icoParts = [Buffer.alloc(headerSize)];
-const header = icoParts[0];
-header.writeUInt16LE(0, 0);
-header.writeUInt16LE(1, 2);
-header.writeUInt16LE(icoFrames.length, 4);
-let offsetBytes = headerSize;
-for (let i = 0; i < icoFrames.length; i += 1) {
-  const frame = icoFrames[i];
-  const entry = 6 + i * 16;
-  header.writeUInt8(frame.size, entry);
-  header.writeUInt8(frame.size, entry + 1);
-  header.writeUInt8(0, entry + 2);
-  header.writeUInt8(0, entry + 3);
-  header.writeUInt16LE(1, entry + 4);
-  header.writeUInt16LE(32, entry + 6);
-  header.writeUInt32LE(frame.bytes.length, entry + 8);
-  header.writeUInt32LE(offsetBytes, entry + 12);
-  offsetBytes += frame.bytes.length;
-  icoParts.push(frame.bytes);
-}
-writeFileSync(join(publicDir, "favicon.ico"), Buffer.concat(icoParts));
+const parts = [Buffer.alloc(headerSize)];
+parts[0].writeUInt16LE(0, 0);
+parts[0].writeUInt16LE(1, 2);
+parts[0].writeUInt16LE(icoFrames.length, 4);
+let byteOffset = headerSize;
+icoFrames.forEach((frame, index) => {
+  const entry = 6 + index * 16;
+  parts[0].writeUInt8(frame.size, entry);
+  parts[0].writeUInt8(frame.size, entry + 1);
+  parts[0].writeUInt16LE(1, entry + 4);
+  parts[0].writeUInt16LE(32, entry + 6);
+  parts[0].writeUInt32LE(frame.bytes.length, entry + 8);
+  parts[0].writeUInt32LE(byteOffset, entry + 12);
+  byteOffset += frame.bytes.length;
+  parts.push(frame.bytes);
+});
+writeFileSync(join(publicDir, "favicon.ico"), Buffer.concat(parts));
 
-console.log("Generated FranChess.co brand assets.");
+console.log("Generated FranChess.co brand assets from franchess-mark.svg.");
